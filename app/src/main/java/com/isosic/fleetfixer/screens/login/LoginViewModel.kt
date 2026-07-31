@@ -3,7 +3,6 @@ package com.isosic.fleetfixer.screens.login
 import android.app.Activity
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.isosic.fleetfixer.auth.AuthTokenStore
 import com.isosic.fleetfixer.auth.GoogleAuthClient
@@ -49,16 +48,6 @@ class LoginViewModel(
                         it.copy(isLoading = false, errorMessage = message)
                     }
                 }
-        }
-    }
-
-    class Factory(
-        private val authTokenStore: AuthTokenStore,
-        private val googleAuthClient: GoogleAuthClient
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return LoginViewModel(authTokenStore, googleAuthClient) as T
         }
     }
 }

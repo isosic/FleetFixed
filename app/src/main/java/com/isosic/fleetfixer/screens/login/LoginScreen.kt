@@ -23,21 +23,15 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.isosic.fleetfixer.R
-import com.isosic.fleetfixer.auth.AuthTokenStore
-import com.isosic.fleetfixer.auth.GoogleAuthClient
 import com.isosic.fleetfixer.ui.theme.FleetFixerTheme
+import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun LoginScreen(
-    authTokenStore: AuthTokenStore,
-    googleAuthClient: GoogleAuthClient,
     onLoginSuccess: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: LoginViewModel = viewModel(
-        factory = LoginViewModel.Factory(authTokenStore, googleAuthClient)
-    )
+    viewModel: LoginViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current

@@ -24,17 +24,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.isosic.fleetfixer.models.Bike
 import com.isosic.fleetfixer.ui.theme.FleetFixerTheme
+import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun AddBikeScreen(
-    onBikeCreated: (Bike) -> Unit,
+    onBikeSaved: () -> Unit,
     onNavigateBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: AddBikeViewModel = koinViewModel()
 ) {
     AddBikeScreenContent(
-        onBikeCreated = onBikeCreated,
+        onSaveClick = { name ->
+            viewModel.saveBike(name = name, onSaved = onBikeSaved)
+        },
         onNavigateBack = onNavigateBack,
         modifier = modifier
     )
@@ -43,7 +46,7 @@ fun AddBikeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddBikeScreenContent(
-    onBikeCreated: (Bike) -> Unit,
+    onSaveClick: (String) -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -81,9 +84,7 @@ private fun AddBikeScreenContent(
             )
             Spacer(modifier = Modifier.height(24.dp))
             Button(
-                onClick = {
-                    onBikeCreated(Bike(name = name.trim()))
-                },
+                onClick = { onSaveClick(name) },
                 enabled = isValid,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -98,7 +99,7 @@ private fun AddBikeScreenContent(
 private fun AddBikeScreenContentPreview() {
     FleetFixerTheme {
         AddBikeScreenContent(
-            onBikeCreated = {},
+            onSaveClick = {},
             onNavigateBack = {}
         )
     }

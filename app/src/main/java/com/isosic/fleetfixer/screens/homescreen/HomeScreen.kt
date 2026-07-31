@@ -27,26 +27,33 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.isosic.fleetfixer.models.Bike
 import com.isosic.fleetfixer.ui.theme.FleetFixerTheme
 import kotlinx.coroutines.launch
+import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun HomeScreen(
-    bikes: List<Bike>,
     onAddBikeClick: () -> Unit,
     onLogoutClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: HomeScreenViewModel = koinViewModel()
 ) {
+    val bikes by viewModel.bikes.collectAsStateWithLifecycle()
+
     HomeScreenContent(
         bikes = bikes,
         onAddBikeClick = onAddBikeClick,
-        onLogoutClick = onLogoutClick,
+        onLogoutClick = {
+            viewModel.logout(onLoggedOut = onLogoutClick)
+        },
         modifier = modifier
     )
 }
