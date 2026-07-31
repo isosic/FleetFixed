@@ -1,4 +1,4 @@
-package com.isosic.myapplication.ui.theme
+package com.isosic.fleetfixer.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

@@ -1,4 +1,4 @@
-package com.isosic.myapplication.screens.addbike
+package com.isosic.fleetfixer.screens.addbike
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -24,8 +24,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.isosic.myapplication.models.Bike
-import com.isosic.myapplication.ui.theme.FleetFixerTheme
+import com.isosic.fleetfixer.models.Bike
+import com.isosic.fleetfixer.ui.theme.FleetFixerTheme
 
 @Composable
 fun AddBikeScreen(

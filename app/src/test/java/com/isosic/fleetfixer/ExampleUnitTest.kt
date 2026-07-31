@@ -1,4 +1,4 @@
-package com.isosic.myapplication
+package com.isosic.fleetfixer
 
 import org.junit.Test
 

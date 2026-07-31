@@ -1,4 +1,4 @@
-package com.isosic.myapplication.models
+package com.isosic.fleetfixer.models
 
 import java.util.UUID
 

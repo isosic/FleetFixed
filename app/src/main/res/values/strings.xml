@@ -1,3 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FleetFixer</string>
+    <!-- Replace with your Web client ID from Google Cloud Console (OAuth 2.0 Client IDs). -->
+    <string name="default_web_client_id">284116610999-mnv2m4oc2cm579cq7evuj5hhoifbhqn9.apps.googleusercontent.com</string>
 </resources>

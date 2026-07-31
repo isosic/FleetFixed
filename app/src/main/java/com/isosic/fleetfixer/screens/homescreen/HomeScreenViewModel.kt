@@ -1,4 +1,4 @@
-package com.isosic.myapplication.screens.homescreen
+package com.isosic.fleetfixer.screens.homescreen
 
 import androidx.lifecycle.ViewModel
 

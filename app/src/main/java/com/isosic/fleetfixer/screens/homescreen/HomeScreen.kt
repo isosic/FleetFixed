@@ -1,4 +1,4 @@
-package com.isosic.myapplication.screens.homescreen
+package com.isosic.fleetfixer.screens.homescreen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +23,7 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -31,20 +32,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.isosic.myapplication.models.Bike
-import com.isosic.myapplication.ui.theme.FleetFixerTheme
+import com.isosic.fleetfixer.models.Bike
+import com.isosic.fleetfixer.ui.theme.FleetFixerTheme
 import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
     bikes: List<Bike>,
     onAddBikeClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    viewModel: HomeScreenViewModel
+    onLogoutClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     HomeScreenContent(
         bikes = bikes,
         onAddBikeClick = onAddBikeClick,
+        onLogoutClick = onLogoutClick,
         modifier = modifier
     )
 }
@@ -54,6 +56,7 @@ fun HomeScreen(
 private fun HomeScreenContent(
     bikes: List<Bike>,
     onAddBikeClick: () -> Unit,
+    onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -106,6 +109,11 @@ private fun HomeScreenContent(
                                 imageVector = Icons.Default.Menu,
                                 contentDescription = "Open bike list"
                             )
+                        }
+                    },
+                    actions = {
+                        TextButton(onClick = onLogoutClick) {
+                            Text("Logout")
                         }
                     }
                 )
@@ -160,7 +168,8 @@ private fun HomeScreenContentPreview() {
                 Bike(name = "Trail Rider"),
                 Bike(name = "City Commuter")
             ),
-            onAddBikeClick = {}
+            onAddBikeClick = {},
+            onLogoutClick = {}
         )
     }
 }
