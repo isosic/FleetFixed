@@ -13,6 +13,9 @@ interface BikeDao {
     @Query("SELECT * FROM bikes ORDER BY name COLLATE NOCASE ASC")
     fun observeAll(): Flow<List<Bike>>
 
+    @Query("SELECT * FROM bikes WHERE id = :bikeId LIMIT 1")
+    fun observeById(bikeId: String): Flow<Bike?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(bike: Bike)
 

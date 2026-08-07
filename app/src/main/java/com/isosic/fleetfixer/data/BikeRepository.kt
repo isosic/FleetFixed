@@ -2,9 +2,11 @@ package com.isosic.fleetfixer.data
 
 import com.google.firebase.auth.FirebaseAuth
 import com.isosic.fleetfixer.models.Bike
+import com.isosic.fleetfixer.models.BikeComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class BikeRepository(
@@ -16,6 +18,8 @@ class BikeRepository(
     private var syncJob: Job? = null
 
     fun observeBikes(): Flow<List<Bike>> = bikeDao.observeAll()
+
+    fun observeBike(bikeId: String): Flow<Bike?> = bikeDao.observeById(bikeId)
 
     fun startSync(scope: CoroutineScope) {
         val uid = firebaseAuth.currentUser?.uid ?: return
@@ -41,6 +45,14 @@ class BikeRepository(
         bikeDao.insert(bike)
         val uid = firebaseAuth.currentUser?.uid ?: return
         remoteDataSource.upsertBike(uid, bike)
+    }
+
+    suspend fun addComponent(bikeId: String, component: BikeComponent) {
+        val bike = bikeDao.observeById(bikeId).first() ?: return
+        val updated = bike.withComponent(component)
+        bikeDao.insert(updated)
+        val uid = firebaseAuth.currentUser?.uid ?: return
+        remoteDataSource.upsertBike(uid, updated)
     }
 
     suspend fun clearLocalAndStopSync() {

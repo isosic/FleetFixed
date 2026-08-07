@@ -42,6 +42,7 @@ import org.koin.androidx.compose.koinViewModel
 @Composable
 fun HomeScreen(
     onAddBikeClick: () -> Unit,
+    onBikeClick: (Bike) -> Unit,
     onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeScreenViewModel = koinViewModel()
@@ -51,6 +52,7 @@ fun HomeScreen(
     HomeScreenContent(
         bikes = bikes,
         onAddBikeClick = onAddBikeClick,
+        onBikeClick = onBikeClick,
         onLogoutClick = {
             viewModel.logout(onLoggedOut = onLogoutClick)
         },
@@ -63,6 +65,7 @@ fun HomeScreen(
 private fun HomeScreenContent(
     bikes: List<Bike>,
     onAddBikeClick: () -> Unit,
+    onBikeClick: (Bike) -> Unit,
     onLogoutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -94,6 +97,7 @@ private fun HomeScreenContent(
                                 selected = false,
                                 onClick = {
                                     scope.launch { drawerState.close() }
+                                    onBikeClick(bike)
                                 },
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             )
@@ -176,6 +180,7 @@ private fun HomeScreenContentPreview() {
                 Bike(name = "City Commuter")
             ),
             onAddBikeClick = {},
+            onBikeClick = {},
             onLogoutClick = {}
         )
     }

@@ -1,24 +1,26 @@
 package com.isosic.fleetfixer.models
 
 import androidx.room.Entity
-import androidx.room.Ignore
 import androidx.room.PrimaryKey
 import java.util.UUID
 
 @Entity(tableName = "bikes")
 data class Bike(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
-    val name: String
+    val name: String,
+    val components: List<BikeComponent> = emptyList()
 ) {
-    @Ignore
-    var components: List<BikeParts> = emptyList()
+    fun componentFor(type: ComponentType): BikeComponent? =
+        components.firstOrNull { it.type == type }
 
-    @Ignore
-    constructor(
-        id: String = UUID.randomUUID().toString(),
-        name: String,
-        components: List<BikeParts>
-    ) : this(id = id, name = name) {
-        this.components = components
+    fun missingComponentTypes(): List<ComponentType> =
+        ComponentType.allSlots.filter { type -> components.none { it.type == type } }
+
+    fun withComponent(component: BikeComponent): Bike {
+        val updated = components
+            .filterNot { it.type == component.type }
+            .plus(component)
+            .sortedBy { it.type.ordinal }
+        return copy(components = updated)
     }
 }

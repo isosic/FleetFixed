@@ -9,6 +9,7 @@ import com.isosic.fleetfixer.data.BikeRemoteDataSource
 import com.isosic.fleetfixer.data.BikeRepository
 import com.isosic.fleetfixer.data.FleetFixerDatabase
 import com.isosic.fleetfixer.screens.addbike.AddBikeViewModel
+import com.isosic.fleetfixer.screens.bikedetail.BikeDetailViewModel
 import com.isosic.fleetfixer.screens.homescreen.HomeScreenViewModel
 import com.isosic.fleetfixer.screens.login.LoginViewModel
 import org.koin.core.module.dsl.viewModel
@@ -25,7 +26,9 @@ val appModule = module {
             get(),
             FleetFixerDatabase::class.java,
             "fleetfixer.db"
-        ).build()
+        )
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
     }
     single { get<FleetFixerDatabase>().bikeDao() }
     single { BikeRemoteDataSource(get()) }
@@ -34,4 +37,5 @@ val appModule = module {
     viewModel { LoginViewModel(get(), get(), get()) }
     viewModel { HomeScreenViewModel(get(), get(), get(), get()) }
     viewModel { AddBikeViewModel(get()) }
+    viewModel { BikeDetailViewModel(get(), get()) }
 }

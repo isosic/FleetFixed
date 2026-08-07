@@ -14,12 +14,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
 import com.isosic.fleetfixer.navigation.Routes
 import com.isosic.fleetfixer.screens.addbike.AddBikeScreen
+import com.isosic.fleetfixer.screens.bikedetail.BikeDetailScreen
 import com.isosic.fleetfixer.screens.homescreen.HomeScreen
 import com.isosic.fleetfixer.screens.login.LoginScreen
 import com.isosic.fleetfixer.ui.theme.FleetFixerTheme
@@ -71,6 +74,9 @@ class MainActivity : ComponentActivity() {
                         composable(Routes.Home) {
                             HomeScreen(
                                 onAddBikeClick = { navController.navigate(Routes.AddBike) },
+                                onBikeClick = { bike ->
+                                    navController.navigate(Routes.bikeDetail(bike.id))
+                                },
                                 onLogoutClick = {
                                     navController.navigate(Routes.Login) {
                                         popUpTo(0) { inclusive = true }
@@ -83,6 +89,18 @@ class MainActivity : ComponentActivity() {
                         composable(Routes.AddBike) {
                             AddBikeScreen(
                                 onBikeSaved = { navController.popBackStack() },
+                                onNavigateBack = { navController.popBackStack() },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        composable(
+                            route = Routes.BikeDetail,
+                            arguments = listOf(
+                                navArgument("bikeId") { type = NavType.StringType }
+                            )
+                        ) {
+                            BikeDetailScreen(
                                 onNavigateBack = { navController.popBackStack() },
                                 modifier = Modifier.fillMaxSize()
                             )
