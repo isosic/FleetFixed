@@ -1,8 +1,11 @@
 package com.isosic.fleetfixer.di
 
 import androidx.room.Room
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.isosic.fleetfixer.auth.AuthTokenStore
 import com.isosic.fleetfixer.auth.GoogleAuthClient
+import com.isosic.fleetfixer.data.BikeRemoteDataSource
 import com.isosic.fleetfixer.data.BikeRepository
 import com.isosic.fleetfixer.data.FleetFixerDatabase
 import com.isosic.fleetfixer.screens.addbike.AddBikeViewModel
@@ -14,6 +17,8 @@ import org.koin.dsl.module
 val appModule = module {
     single { AuthTokenStore(get()) }
     single { GoogleAuthClient(get()) }
+    single { FirebaseAuth.getInstance() }
+    single { FirebaseFirestore.getInstance() }
 
     single {
         Room.databaseBuilder(
@@ -23,9 +28,10 @@ val appModule = module {
         ).build()
     }
     single { get<FleetFixerDatabase>().bikeDao() }
-    single { BikeRepository(get()) }
+    single { BikeRemoteDataSource(get()) }
+    single { BikeRepository(get(), get(), get()) }
 
-    viewModel { LoginViewModel(get(), get()) }
-    viewModel { HomeScreenViewModel(get(), get(), get()) }
+    viewModel { LoginViewModel(get(), get(), get()) }
+    viewModel { HomeScreenViewModel(get(), get(), get(), get()) }
     viewModel { AddBikeViewModel(get()) }
 }

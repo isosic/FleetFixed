@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.isosic.fleetfixer.auth.AuthTokenStore
+import com.google.firebase.auth.FirebaseAuth
 import com.isosic.fleetfixer.navigation.Routes
 import com.isosic.fleetfixer.screens.addbike.AddBikeScreen
 import com.isosic.fleetfixer.screens.homescreen.HomeScreen
@@ -31,12 +31,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             FleetFixerTheme {
-                val authTokenStore: AuthTokenStore = koinInject()
+                val firebaseAuth: FirebaseAuth = koinInject()
                 var startDestination by remember { mutableStateOf<String?>(null) }
                 val navController = rememberNavController()
 
-                LaunchedEffect(authTokenStore) {
-                    startDestination = if (authTokenStore.hasToken()) {
+                LaunchedEffect(firebaseAuth) {
+                    startDestination = if (firebaseAuth.currentUser != null) {
                         Routes.Home
                     } else {
                         Routes.Login

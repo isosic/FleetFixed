@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "284116610999",
+    "project_id": "fleetfixer",
+    "storage_bucket": "fleetfixer.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:284116610999:android:750549db97aae817dc8232",
+        "android_client_info": {
+          "package_name": "com.isosic.fleetfixer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "284116610999-oqf3hgkmbm8urgfk2omvr9fd7b4cnjb7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.isosic.fleetfixer",
+            "certificate_hash": "52a31abaad37fe7d1ff3568eb9fbc76d550e3046"
+          }
+        },
+        {
+          "client_id": "284116610999-oupfnur5s3mba109v8d0shr64stk0l6e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxIPlymBZASq3TsI5ITJv1q_3UbR1_CB0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "284116610999-mnv2m4oc2cm579cq7evuj5hhoifbhqn9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

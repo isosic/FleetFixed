@@ -2,6 +2,7 @@ package com.isosic.fleetfixer.screens.homescreen
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.firebase.auth.FirebaseAuth
 import com.isosic.fleetfixer.auth.AuthTokenStore
 import com.isosic.fleetfixer.auth.GoogleAuthClient
 import com.isosic.fleetfixer.data.BikeRepository
@@ -12,9 +13,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class HomeScreenViewModel(
-    bikeRepository: BikeRepository,
+    private val bikeRepository: BikeRepository,
     private val authTokenStore: AuthTokenStore,
-    private val googleAuthClient: GoogleAuthClient
+    private val googleAuthClient: GoogleAuthClient,
+    private val firebaseAuth: FirebaseAuth
 ) : ViewModel() {
 
     val bikes: StateFlow<List<Bike>> = bikeRepository.observeBikes()
@@ -24,11 +26,22 @@ class HomeScreenViewModel(
             initialValue = emptyList()
         )
 
+    init {
+        bikeRepository.startSync(viewModelScope)
+    }
+
     fun logout(onLoggedOut: () -> Unit) {
         viewModelScope.launch {
+            bikeRepository.clearLocalAndStopSync()
+            runCatching { firebaseAuth.signOut() }
             runCatching { googleAuthClient.signOut() }
             authTokenStore.clearToken()
             onLoggedOut()
         }
+    }
+
+    override fun onCleared() {
+        bikeRepository.stopSync()
+        super.onCleared()
     }
 }

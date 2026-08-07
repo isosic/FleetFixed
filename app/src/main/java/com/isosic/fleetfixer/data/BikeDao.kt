@@ -15,4 +15,13 @@ interface BikeDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(bike: Bike)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(bikes: List<Bike>)
+
+    @Query("DELETE FROM bikes")
+    suspend fun deleteAll()
+
+    @Query("DELETE FROM bikes WHERE id NOT IN (:ids)")
+    suspend fun deleteNotIn(ids: List<String>)
 }
