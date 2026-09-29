@@ -47,6 +47,18 @@ class BikeRepository(
         remoteDataSource.upsertBike(uid, bike)
     }
 
+    suspend fun replaceBikeId(oldBikeId: String, updatedBike: Bike) {
+        require(oldBikeId != updatedBike.id) { "New bike id must differ from the old id" }
+        // Upsert the Strava-id bike first so Firestore sync never sees an empty fleet mid-link.
+        bikeDao.insert(updatedBike)
+        val uid = firebaseAuth.currentUser?.uid
+        if (uid != null) {
+            remoteDataSource.upsertBike(uid, updatedBike)
+            remoteDataSource.deleteBike(uid, oldBikeId)
+        }
+        bikeDao.deleteById(oldBikeId)
+    }
+
     suspend fun addComponent(bikeId: String, component: BikeComponent) {
         val bike = bikeDao.observeById(bikeId).first() ?: return
         val updated = bike.withComponent(component)

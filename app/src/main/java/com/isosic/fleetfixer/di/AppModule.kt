@@ -12,12 +12,18 @@ import com.isosic.fleetfixer.screens.addbike.AddBikeViewModel
 import com.isosic.fleetfixer.screens.bikedetail.BikeDetailViewModel
 import com.isosic.fleetfixer.screens.homescreen.HomeScreenViewModel
 import com.isosic.fleetfixer.screens.login.LoginViewModel
+import com.isosic.fleetfixer.strava.StravaApiClient
+import com.isosic.fleetfixer.strava.StravaAuthClient
+import com.isosic.fleetfixer.strava.StravaTokenStore
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val appModule = module {
     single { AuthTokenStore(get()) }
     single { GoogleAuthClient(get()) }
+    single { StravaTokenStore(get()) }
+    single { StravaAuthClient(get()) }
+    single { StravaApiClient(get()) }
     single { FirebaseAuth.getInstance() }
     single { FirebaseFirestore.getInstance() }
 
@@ -35,7 +41,7 @@ val appModule = module {
     single { BikeRepository(get(), get(), get()) }
 
     viewModel { LoginViewModel(get(), get(), get()) }
-    viewModel { HomeScreenViewModel(get(), get(), get(), get()) }
+    viewModel { HomeScreenViewModel(get(), get(), get(), get(), get(), get(), get()) }
     viewModel { AddBikeViewModel(get()) }
     viewModel { BikeDetailViewModel(get(), get()) }
 }

@@ -45,6 +45,13 @@ class BikeRemoteDataSource(
             .await()
     }
 
+    suspend fun deleteBike(uid: String, bikeId: String) {
+        bikesCollection(uid)
+            .document(bikeId)
+            .delete()
+            .await()
+    }
+
     private fun bikesCollection(uid: String) =
         firestore.collection(COLLECTION_USERS)
             .document(uid)
