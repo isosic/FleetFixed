@@ -67,6 +67,12 @@ class BikeRepository(
         remoteDataSource.upsertBike(uid, updated)
     }
 
+    suspend fun deleteBike(bikeId: String) {
+        bikeDao.deleteById(bikeId)
+        val uid = firebaseAuth.currentUser?.uid ?: return
+        remoteDataSource.deleteBike(uid, bikeId)
+    }
+
     suspend fun clearLocalAndStopSync() {
         stopSync()
         bikeDao.deleteAll()

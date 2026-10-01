@@ -7,8 +7,11 @@ import com.isosic.fleetfixer.data.BikeRepository
 import com.isosic.fleetfixer.models.Bike
 import com.isosic.fleetfixer.models.BikeComponent
 import com.isosic.fleetfixer.models.ComponentType
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -26,6 +29,9 @@ class BikeDetailViewModel(
             initialValue = null
         )
 
+    private val _events = MutableSharedFlow<BikeDetailEvent>(extraBufferCapacity = 1)
+    val events: SharedFlow<BikeDetailEvent> = _events.asSharedFlow()
+
     fun addComponent(type: ComponentType, name: String, notes: String, dateAddedEpochMillis: Long) {
         viewModelScope.launch {
             bikeRepository.addComponent(
@@ -40,7 +46,18 @@ class BikeDetailViewModel(
         }
     }
 
+    fun deleteBike() {
+        viewModelScope.launch {
+            bikeRepository.deleteBike(bikeId)
+            _events.emit(BikeDetailEvent.Deleted)
+        }
+    }
+
     companion object {
         const val BIKE_ID_KEY = "bikeId"
     }
+}
+
+sealed interface BikeDetailEvent {
+    data object Deleted : BikeDetailEvent
 }

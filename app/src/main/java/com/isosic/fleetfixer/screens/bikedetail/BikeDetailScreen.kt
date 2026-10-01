@@ -2,37 +2,35 @@ package com.isosic.fleetfixer.screens.bikedetail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PendingActions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,25 +38,33 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.isosic.fleetfixer.models.Bike
-import com.isosic.fleetfixer.models.BikeComponent
-import com.isosic.fleetfixer.models.ComponentType
 import com.isosic.fleetfixer.ui.theme.FleetFixerTheme
 import org.koin.androidx.compose.koinViewModel
-import java.text.DateFormat
-import java.util.Date
 
 @Composable
 fun BikeDetailScreen(
     onNavigateBack: () -> Unit,
+    onComponentsClick: () -> Unit,
+    onPendingWorkClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: BikeDetailViewModel = koinViewModel()
 ) {
     val bike by viewModel.bike.collectAsStateWithLifecycle()
 
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                BikeDetailEvent.Deleted -> onNavigateBack()
+            }
+        }
+    }
+
     BikeDetailScreenContent(
         bike = bike,
         onNavigateBack = onNavigateBack,
-        onAddComponent = viewModel::addComponent,
+        onComponentsClick = onComponentsClick,
+        onPendingWorkClick = onPendingWorkClick,
+        onDeleteConfirmed = viewModel::deleteBike,
         modifier = modifier
     )
 }
@@ -68,10 +74,12 @@ fun BikeDetailScreen(
 private fun BikeDetailScreenContent(
     bike: Bike?,
     onNavigateBack: () -> Unit,
-    onAddComponent: (ComponentType, String, String, Long) -> Unit,
+    onComponentsClick: () -> Unit,
+    onPendingWorkClick: () -> Unit,
+    onDeleteConfirmed: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var componentToAdd by remember { mutableStateOf<ComponentType?>(null) }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier,
@@ -101,191 +109,99 @@ private fun BikeDetailScreenContent(
                 Text("Bike not found")
             }
         } else {
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(innerPadding)
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(ComponentType.allSlots, key = { it.name }) { type ->
-                    val component = bike.componentFor(type)
-                    ComponentSlotRow(
-                        type = type,
-                        component = component,
-                        onAddClick = { componentToAdd = type }
-                    )
-                    HorizontalDivider()
-                }
-            }
-        }
-    }
-
-    componentToAdd?.let { type ->
-        AddComponentDialog(
-            type = type,
-            onDismiss = { componentToAdd = null },
-            onSave = { name, notes, dateAdded ->
-                onAddComponent(type, name, notes, dateAdded)
-                componentToAdd = null
-            }
-        )
-    }
-}
-
-@Composable
-private fun ComponentSlotRow(
-    type: ComponentType,
-    component: BikeComponent?,
-    onAddClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = type.displayName,
-                style = MaterialTheme.typography.titleMedium
-            )
-            if (component == null) {
-                Text(
-                    text = "Not added",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            } else {
-                Text(
-                    text = component.name,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Text(
-                    text = "Added ${formatDate(component.dateAddedEpochMillis)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (component.notes.isNotBlank()) {
-                    Text(
-                        text = component.notes,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
-        }
-        if (component == null) {
-            TextButton(onClick = onAddClick) {
-                Text("Add")
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AddComponentDialog(
-    type: ComponentType,
-    onDismiss: () -> Unit,
-    onSave: (name: String, notes: String, dateAddedEpochMillis: Long) -> Unit
-) {
-    var name by rememberSaveable { mutableStateOf("") }
-    var notes by rememberSaveable { mutableStateOf("") }
-    var dateAddedMillis by rememberSaveable {
-        mutableStateOf(System.currentTimeMillis())
-    }
-    var showDatePicker by remember { mutableStateOf(false) }
-    val isValid = name.isNotBlank()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Add ${type.displayName}") },
-        text = {
-            Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Name") },
-                    singleLine = true,
+                OutlinedButton(
+                    onClick = onComponentsClick,
                     modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    label = { Text("Notes (optional)") },
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Build,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Components")
+                }
+
+                OutlinedButton(
+                    onClick = onPendingWorkClick,
                     modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                TextButton(onClick = { showDatePicker = true }) {
-                    Text("Date added: ${formatDate(dateAddedMillis)}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PendingActions,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Pending work")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Button(
+                    onClick = { showDeleteConfirmation = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Delete bike")
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onSave(name, notes, dateAddedMillis) },
-                enabled = isValid
-            ) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
         }
-    )
+    }
 
-    if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = dateAddedMillis
-        )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("Delete bike?") },
+            text = {
+                Text(
+                    "This will permanently remove \"${bike?.name.orEmpty()}\" from this device and Firebase."
+                )
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        datePickerState.selectedDateMillis?.let { dateAddedMillis = it }
-                        showDatePicker = false
+                        showDeleteConfirmation = false
+                        onDeleteConfirmed()
                     }
                 ) {
-                    Text("OK")
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
+                TextButton(onClick = { showDeleteConfirmation = false }) {
                     Text("Cancel")
                 }
             }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+        )
     }
 }
-
-private fun formatDate(epochMillis: Long): String =
-    DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(epochMillis))
 
 @Preview(showBackground = true)
 @Composable
 private fun BikeDetailScreenContentPreview() {
     FleetFixerTheme {
         BikeDetailScreenContent(
-            bike = Bike(
-                name = "Trail Rider",
-                components = listOf(
-                    BikeComponent(
-                        type = ComponentType.FORK,
-                        name = "Fox 36",
-                        notes = "150mm",
-                        dateAddedEpochMillis = System.currentTimeMillis()
-                    )
-                )
-            ),
+            bike = Bike(name = "Trail Rider"),
             onNavigateBack = {},
-            onAddComponent = { _, _, _, _ -> }
+            onComponentsClick = {},
+            onPendingWorkClick = {},
+            onDeleteConfirmed = {}
         )
     }
 }

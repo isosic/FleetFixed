@@ -25,7 +25,9 @@ import androidx.navigation.navArgument
 import com.google.firebase.auth.FirebaseAuth
 import com.isosic.fleetfixer.navigation.Routes
 import com.isosic.fleetfixer.screens.addbike.AddBikeScreen
+import com.isosic.fleetfixer.screens.bikedetail.BikeComponentsScreen
 import com.isosic.fleetfixer.screens.bikedetail.BikeDetailScreen
+import com.isosic.fleetfixer.screens.bikedetail.BikePendingWorkScreen
 import com.isosic.fleetfixer.screens.homescreen.HomeScreen
 import com.isosic.fleetfixer.screens.login.LoginScreen
 import com.isosic.fleetfixer.strava.StravaAuthClient
@@ -110,8 +112,39 @@ class MainActivity : ComponentActivity() {
                             arguments = listOf(
                                 navArgument("bikeId") { type = NavType.StringType }
                             )
-                        ) {
+                        ) { entry ->
+                            val bikeId = checkNotNull(entry.arguments?.getString("bikeId"))
                             BikeDetailScreen(
+                                onNavigateBack = { navController.popBackStack() },
+                                onComponentsClick = {
+                                    navController.navigate(Routes.bikeComponents(bikeId))
+                                },
+                                onPendingWorkClick = {
+                                    navController.navigate(Routes.bikePendingWork(bikeId))
+                                },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        composable(
+                            route = Routes.BikeComponents,
+                            arguments = listOf(
+                                navArgument("bikeId") { type = NavType.StringType }
+                            )
+                        ) {
+                            BikeComponentsScreen(
+                                onNavigateBack = { navController.popBackStack() },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        composable(
+                            route = Routes.BikePendingWork,
+                            arguments = listOf(
+                                navArgument("bikeId") { type = NavType.StringType }
+                            )
+                        ) {
+                            BikePendingWorkScreen(
                                 onNavigateBack = { navController.popBackStack() },
                                 modifier = Modifier.fillMaxSize()
                             )
