@@ -7,6 +7,7 @@ import com.isosic.fleetfixer.core.domain.AppAuth
 import com.isosic.fleetfixer.core.domain.AuthTokenStore
 import com.isosic.fleetfixer.core.domain.BikeRepository
 import com.isosic.fleetfixer.core.domain.GoogleSignInGateway
+import com.isosic.fleetfixer.core.domain.ComponentMileageRefresher
 import com.isosic.fleetfixer.core.domain.SelectedBikeStore
 import com.isosic.fleetfixer.core.domain.StravaAuthRepository
 import com.isosic.fleetfixer.core.domain.StravaBikeRemoteSource
@@ -44,7 +45,8 @@ class HomeScreenViewModel(
     private val stravaTokenStore: StravaTokenStore,
     private val stravaAuthRepository: StravaAuthRepository,
     private val stravaBikeRemoteSource: StravaBikeRemoteSource,
-    private val selectedBikeStore: SelectedBikeStore
+    private val selectedBikeStore: SelectedBikeStore,
+    private val componentMileageRefresher: ComponentMileageRefresher
 ) : ViewModel() {
 
     val bikes: StateFlow<List<Bike>> = bikeRepository.observeBikes()
@@ -78,7 +80,7 @@ class HomeScreenViewModel(
     private var silentRefreshInFlight = false
 
     init {
-        bikeRepository.startSync(viewModelScope)
+        bikeRepository.startSync()
         viewModelScope.launch {
             stravaAuthRepository.isConnected.collect { connected ->
                 _uiState.update { it.copy(isStravaConnected = connected) }
@@ -175,19 +177,27 @@ class HomeScreenViewModel(
         if (_uiState.value.isStravaBusy || _uiState.value.stravaLinkPrompt != null) return
         if (silentRefreshInFlight) return
 
+        val localBikes = bikeRepository.observeBikes().first()
+        val missingPurchaseDate = localBikes.any { it.purchaseDateEpochMillis == null }
         val lastSyncAt = stravaTokenStore.getLastBikeSyncEpochMillis()
         val now = System.currentTimeMillis()
-        if (now - lastSyncAt < SILENT_SYNC_MIN_INTERVAL_MS) return
+        if (
+            !missingPurchaseDate &&
+            now - lastSyncAt < SILENT_SYNC_MIN_INTERVAL_MS
+        ) {
+            return
+        }
 
         silentRefreshInFlight = true
         try {
             stravaBikeRemoteSource.fetchAthleteBikes()
                 .onSuccess { stravaBikes ->
-                    val localBikes = bikeRepository.observeBikes().first()
-                    syncLinkedBikesFromStrava(localBikes, stravaBikes)
+                    val bikes = bikeRepository.observeBikes().first()
+                    syncLinkedBikesFromStrava(bikes, stravaBikes)
+                    componentMileageRefresher.updateAllBikesWithComponents()
                     markBikeSyncCompleted()
 
-                    val existingIds = localBikes.map { it.id }.toSet()
+                    val existingIds = bikes.map { it.id }.toSet()
                     val newCount = stravaBikes.count { it.id !in existingIds }
                     if (newCount > 0) {
                         _uiState.update {
@@ -250,6 +260,7 @@ class HomeScreenViewModel(
         val linkableLocalBikes = localBikes.filterNot { isLikelyStravaId(it.id) }
 
         syncLinkedBikesFromStrava(localBikes, stravaBikes)
+        componentMileageRefresher.updateAllBikesWithComponents()
 
         pendingStravaBikes.clear()
         pendingStravaBikes.addAll(bikesToProcess)
@@ -416,11 +427,6 @@ class HomeScreenViewModel(
             stravaTokenStore.clearTokens()
             onLoggedOut()
         }
-    }
-
-    override fun onCleared() {
-        bikeRepository.stopSync()
-        super.onCleared()
     }
 
     private companion object {

@@ -7,15 +7,18 @@ import com.isosic.fleetfixer.core.model.BikeComponent
 import com.isosic.fleetfixer.data.local.BikeDao
 import com.isosic.fleetfixer.data.remote.BikeRemoteDataSource
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class BikeRepositoryImpl(
     private val bikeDao: BikeDao,
     private val remoteDataSource: BikeRemoteDataSource,
-    private val appAuth: AppAuth
+    private val appAuth: AppAuth,
+    private val applicationScope: CoroutineScope
 ) : BikeRepository {
 
     private var syncJob: Job? = null
@@ -24,16 +27,20 @@ class BikeRepositoryImpl(
 
     override fun observeBike(bikeId: String): Flow<Bike?> = bikeDao.observeById(bikeId)
 
-    override fun startSync(scope: CoroutineScope) {
+    override fun startSync() {
         val uid = appAuth.currentUserId ?: return
-        syncJob?.cancel()
-        syncJob = scope.launch {
-            remoteDataSource.observeBikes(uid).collect { bikes ->
-                if (bikes.isEmpty()) {
+        if (syncJob?.isActive == true) return
+        syncJob = applicationScope.launch(Dispatchers.IO) {
+            remoteDataSource.observeBikes(uid).collect { remoteBikes ->
+                if (remoteBikes.isEmpty()) {
                     bikeDao.deleteAll()
                 } else {
-                    bikeDao.insertAll(bikes)
-                    bikeDao.deleteNotIn(bikes.map { it.id })
+                    val localById = bikeDao.observeAll().first().associateBy { it.id }
+                    val merged = remoteBikes.map { remote ->
+                        mergePreservingLocalPurchaseDate(remote, localById[remote.id])
+                    }
+                    bikeDao.insertAll(merged)
+                    bikeDao.deleteNotIn(merged.map { it.id })
                 }
             }
         }
@@ -47,7 +54,9 @@ class BikeRepositoryImpl(
     override suspend fun addBike(bike: Bike) {
         bikeDao.insert(bike)
         val uid = appAuth.currentUserId ?: return
-        remoteDataSource.upsertBike(uid, bike)
+        withContext(Dispatchers.IO) {
+            remoteDataSource.upsertBike(uid, bike)
+        }
     }
 
     override suspend fun replaceBikeId(oldBikeId: String, updatedBike: Bike) {
@@ -55,28 +64,49 @@ class BikeRepositoryImpl(
         bikeDao.insert(updatedBike)
         val uid = appAuth.currentUserId
         if (uid != null) {
-            remoteDataSource.upsertBike(uid, updatedBike)
-            remoteDataSource.deleteBike(uid, oldBikeId)
+            withContext(Dispatchers.IO) {
+                remoteDataSource.upsertBike(uid, updatedBike)
+                remoteDataSource.deleteBike(uid, oldBikeId)
+            }
         }
         bikeDao.deleteById(oldBikeId)
     }
 
     override suspend fun addComponent(bikeId: String, component: BikeComponent) {
+        upsertComponent(bikeId, component)
+    }
+
+    override suspend fun updateComponent(bikeId: String, component: BikeComponent) {
+        upsertComponent(bikeId, component)
+    }
+
+    private suspend fun upsertComponent(bikeId: String, component: BikeComponent) {
         val bike = bikeDao.observeById(bikeId).first() ?: return
         val updated = bike.withComponent(component)
         bikeDao.insert(updated)
         val uid = appAuth.currentUserId ?: return
-        remoteDataSource.upsertBike(uid, updated)
+        withContext(Dispatchers.IO) {
+            remoteDataSource.upsertBike(uid, updated)
+        }
     }
 
     override suspend fun deleteBike(bikeId: String) {
         bikeDao.deleteById(bikeId)
         val uid = appAuth.currentUserId ?: return
-        remoteDataSource.deleteBike(uid, bikeId)
+        withContext(Dispatchers.IO) {
+            remoteDataSource.deleteBike(uid, bikeId)
+        }
     }
 
     override suspend fun clearLocalAndStopSync() {
         stopSync()
         bikeDao.deleteAll()
+    }
+
+    private fun mergePreservingLocalPurchaseDate(remote: Bike, local: Bike?): Bike {
+        if (remote.purchaseDateEpochMillis != null || local?.purchaseDateEpochMillis == null) {
+            return remote
+        }
+        return remote.copy(purchaseDateEpochMillis = local.purchaseDateEpochMillis)
     }
 }

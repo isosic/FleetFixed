@@ -39,9 +39,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import com.isosic.fleetfixer.core.model.Bike
+import com.isosic.fleetfixer.core.ui.formatDistanceKm
 import com.isosic.fleetfixer.core.ui.theme.FleetFixerTheme
 import org.koin.androidx.compose.koinViewModel
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 fun BikeDetailScreen(
@@ -54,6 +58,10 @@ fun BikeDetailScreen(
     val bike by viewModel.bike.collectAsStateWithLifecycle()
 
     LaunchedEffect(viewModel) {
+        viewModel.onDetailVisible()
+    }
+
+    LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
                 BikeDetailEvent.Deleted -> onNavigateBack()
@@ -63,9 +71,9 @@ fun BikeDetailScreen(
 
     BikeDetailScreenContent(
         bike = bike,
-        onNavigateBack = onNavigateBack,
-        onComponentsClick = onComponentsClick,
-        onPendingWorkClick = onPendingWorkClick,
+        onNavigateBack = dropUnlessResumed { onNavigateBack() },
+        onComponentsClick = dropUnlessResumed { onComponentsClick() },
+        onPendingWorkClick = dropUnlessResumed { onPendingWorkClick() },
         onDeleteConfirmed = viewModel::deleteBike,
         modifier = modifier
     )
@@ -118,6 +126,20 @@ private fun BikeDetailScreenContent(
                         .padding(24.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    Text(
+                        text = "Purchase date: ${
+                            bike.purchaseDateEpochMillis?.let(::formatDate) ?: "Not set"
+                        }",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = "Total mileage: ${formatDistanceKm(bike.distanceMeters)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     OutlinedButton(
                         onClick = onComponentsClick,
                         modifier = Modifier.fillMaxWidth()
@@ -195,12 +217,19 @@ private fun BikeDetailScreenContent(
     }
 }
 
+private fun formatDate(epochMillis: Long): String =
+    DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(epochMillis))
+
 @Preview(showBackground = true)
 @Composable
 private fun BikeDetailScreenContentPreview() {
     FleetFixerTheme {
         BikeDetailScreenContent(
-            bike = Bike(name = "Trail Rider"),
+            bike = Bike(
+                name = "Trail Rider",
+                distanceMeters = 12_450.0,
+                purchaseDateEpochMillis = System.currentTimeMillis()
+            ),
             onNavigateBack = {},
             onComponentsClick = {},
             onPendingWorkClick = {},

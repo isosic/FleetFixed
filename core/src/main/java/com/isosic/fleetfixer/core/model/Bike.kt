@@ -9,6 +9,7 @@ data class Bike(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val name: String,
     val distanceMeters: Double = 0.0,
+    val purchaseDateEpochMillis: Long? = null,
     val components: List<BikeComponent> = emptyList()
 ) {
     fun componentFor(type: ComponentType): BikeComponent? =

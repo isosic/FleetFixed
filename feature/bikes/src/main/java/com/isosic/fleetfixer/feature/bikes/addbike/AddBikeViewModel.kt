@@ -10,9 +10,14 @@ class AddBikeViewModel(
     private val bikeRepository: BikeRepository
 ) : ViewModel() {
 
-    fun saveBike(name: String, onSaved: () -> Unit) {
+    fun saveBike(name: String, purchaseDateEpochMillis: Long, onSaved: () -> Unit) {
         viewModelScope.launch {
-            bikeRepository.addBike(Bike(name = name.trim()))
+            bikeRepository.addBike(
+                Bike(
+                    name = name.trim(),
+                    purchaseDateEpochMillis = purchaseDateEpochMillis
+                )
+            )
             onSaved()
         }
     }

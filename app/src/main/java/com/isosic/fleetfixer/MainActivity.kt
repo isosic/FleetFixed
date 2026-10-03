@@ -31,6 +31,7 @@ import com.isosic.fleetfixer.feature.bikes.addbike.AddBikeScreen
 import com.isosic.fleetfixer.feature.bikes.detail.BikeComponentsScreen
 import com.isosic.fleetfixer.feature.bikes.detail.BikeDetailScreen
 import com.isosic.fleetfixer.feature.bikes.detail.BikePendingWorkScreen
+import com.isosic.fleetfixer.feature.bikes.detail.ComponentDetailScreen
 import com.isosic.fleetfixer.feature.bikes.home.HomeScreen
 import com.isosic.fleetfixer.navigation.Routes
 import kotlinx.coroutines.delay
@@ -103,8 +104,8 @@ class MainActivity : ComponentActivity() {
 
                         composable(Routes.AddBike) {
                             AddBikeScreen(
-                                onBikeSaved = { navController.popBackStack() },
-                                onNavigateBack = { navController.popBackStack() },
+                                onBikeSaved = { navController.navigateUp() },
+                                onNavigateBack = { navController.navigateUp() },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -118,7 +119,7 @@ class MainActivity : ComponentActivity() {
                             val bikeId = checkNotNull(entry.arguments?.getString("bikeId"))
                             key(bikeId) {
                                 BikeDetailScreen(
-                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateBack = { navController.navigateUp() },
                                     onComponentsClick = {
                                         navController.navigate(Routes.bikeComponents(bikeId))
                                     },
@@ -134,14 +135,41 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(
+                            route = Routes.ComponentDetail,
+                            arguments = listOf(
+                                navArgument("bikeId") { type = NavType.StringType },
+                                navArgument("componentType") { type = NavType.StringType }
+                            )
+                        ) { entry ->
+                            key(
+                                entry.arguments?.getString("bikeId"),
+                                entry.arguments?.getString("componentType")
+                            ) {
+                                ComponentDetailScreen(
+                                    onNavigateBack = { navController.navigateUp() },
+                                    viewModel = koinViewModel(
+                                        viewModelStoreOwner = entry
+                                    ),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+
+                        composable(
                             route = Routes.BikeComponents,
                             arguments = listOf(
                                 navArgument("bikeId") { type = NavType.StringType }
                             )
                         ) { entry ->
-                            key(entry.arguments?.getString("bikeId")) {
+                            val bikeId = checkNotNull(entry.arguments?.getString("bikeId"))
+                            key(bikeId) {
                                 BikeComponentsScreen(
-                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateBack = { navController.navigateUp() },
+                                    onComponentClick = { type ->
+                                        navController.navigate(
+                                            Routes.componentDetail(bikeId, type.name)
+                                        )
+                                    },
                                     viewModel = koinViewModel(
                                         viewModelStoreOwner = entry
                                     ),
@@ -156,9 +184,15 @@ class MainActivity : ComponentActivity() {
                                 navArgument("bikeId") { type = NavType.StringType }
                             )
                         ) { entry ->
-                            key(entry.arguments?.getString("bikeId")) {
+                            val bikeId = checkNotNull(entry.arguments?.getString("bikeId"))
+                            key(bikeId) {
                                 BikePendingWorkScreen(
-                                    onNavigateBack = { navController.popBackStack() },
+                                    onNavigateBack = { navController.navigateUp() },
+                                    onComponentClick = { type ->
+                                        navController.navigate(
+                                            Routes.componentDetail(bikeId, type.name)
+                                        )
+                                    },
                                     viewModel = koinViewModel(
                                         viewModelStoreOwner = entry
                                     ),

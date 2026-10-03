@@ -9,16 +9,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -26,6 +31,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.isosic.fleetfixer.core.ui.theme.FleetFixerTheme
 import org.koin.androidx.compose.koinViewModel
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 fun AddBikeScreen(
@@ -35,8 +42,12 @@ fun AddBikeScreen(
     viewModel: AddBikeViewModel = koinViewModel()
 ) {
     AddBikeScreenContent(
-        onSaveClick = { name ->
-            viewModel.saveBike(name = name, onSaved = onBikeSaved)
+        onSaveClick = { name, purchaseDateEpochMillis ->
+            viewModel.saveBike(
+                name = name,
+                purchaseDateEpochMillis = purchaseDateEpochMillis,
+                onSaved = onBikeSaved
+            )
         },
         onNavigateBack = onNavigateBack,
         modifier = modifier
@@ -46,11 +57,13 @@ fun AddBikeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddBikeScreenContent(
-    onSaveClick: (String) -> Unit,
+    onSaveClick: (name: String, purchaseDateEpochMillis: Long) -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var name by rememberSaveable { mutableStateOf("") }
+    var purchaseDateMillis by rememberSaveable { mutableStateOf(System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
     val isValid = name.isNotBlank()
 
     Scaffold(
@@ -82,9 +95,13 @@ private fun AddBikeScreenContent(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
+            Spacer(modifier = Modifier.height(12.dp))
+            TextButton(onClick = { showDatePicker = true }) {
+                Text("Purchase date: ${formatDate(purchaseDateMillis)}")
+            }
             Spacer(modifier = Modifier.height(24.dp))
             Button(
-                onClick = { onSaveClick(name) },
+                onClick = { onSaveClick(name, purchaseDateMillis) },
                 enabled = isValid,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -92,14 +109,43 @@ private fun AddBikeScreenContent(
             }
         }
     }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = purchaseDateMillis
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { purchaseDateMillis = it }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 }
+
+private fun formatDate(epochMillis: Long): String =
+    DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(epochMillis))
 
 @Preview(showBackground = true)
 @Composable
 private fun AddBikeScreenContentPreview() {
     FleetFixerTheme {
         AddBikeScreenContent(
-            onSaveClick = {},
+            onSaveClick = { _, _ -> },
             onNavigateBack = {}
         )
     }

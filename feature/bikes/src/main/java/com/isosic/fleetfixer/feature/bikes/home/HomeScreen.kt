@@ -48,13 +48,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.repeatOnLifecycle
 import com.isosic.fleetfixer.core.model.Bike
+import com.isosic.fleetfixer.core.ui.formatDistanceKm
 import com.isosic.fleetfixer.core.ui.theme.FleetFixerTheme
-import java.util.Locale
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -200,10 +202,14 @@ private fun HomeScreenContent(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch { drawerState.close() }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(drawerState = drawerState) {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Text(
                         text = "Bikes",
@@ -278,7 +284,13 @@ private fun HomeScreenContent(
                     title = { Text("FleetFixer") },
                     navigationIcon = {
                         IconButton(
-                            onClick = { scope.launch { drawerState.open() } }
+                            onClick = {
+                                scope.launch {
+                                    if (drawerState.isClosed && !drawerState.isAnimationRunning) {
+                                        drawerState.open()
+                                    }
+                                }
+                            }
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Menu,
@@ -320,7 +332,9 @@ private fun HomeScreenContent(
                         selectedBike != null -> {
                             SelectedBikeInfo(
                                 bike = selectedBike,
-                                onClick = { onSelectedBikeClick(selectedBike) }
+                                onClick = dropUnlessResumed {
+                                    onSelectedBikeClick(selectedBike)
+                                }
                             )
                         }
                         bikes.isEmpty() -> {
@@ -391,16 +405,6 @@ private fun SelectedBikeInfo(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
-}
-
-private fun formatDistanceKm(distanceMeters: Double): String {
-    val km = distanceMeters / 1_000.0
-    val formatted = if (km < 10.0) {
-        String.format(Locale.getDefault(), "%.1f", km)
-    } else {
-        String.format(Locale.getDefault(), "%.0f", km)
-    }
-    return "$formatted km"
 }
 
 @Preview(showBackground = true)

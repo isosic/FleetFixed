@@ -1,9 +1,12 @@
 package com.isosic.fleetfixer.data.remote
 
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.isosic.fleetfixer.core.model.Bike
 import com.isosic.fleetfixer.core.model.BikeComponent
 import com.isosic.fleetfixer.core.model.ComponentType
+import com.isosic.fleetfixer.core.model.PendingWorkItem
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -27,7 +30,8 @@ class BikeRemoteDataSource(
                         Bike(
                             id = document.id,
                             name = name,
-                            distanceMeters = document.getDouble(FIELD_DISTANCE_METERS) ?: 0.0,
+                            distanceMeters = document.optionalDouble(FIELD_DISTANCE_METERS) ?: 0.0,
+                            purchaseDateEpochMillis = document.optionalLong(FIELD_PURCHASE_DATE),
                             components = parseComponents(document.get(FIELD_COMPONENTS))
                         )
                     }
@@ -42,7 +46,8 @@ class BikeRemoteDataSource(
     suspend fun upsertBike(uid: String, bike: Bike) {
         bikesCollection(uid)
             .document(bike.id)
-            .set(bikeToMap(bike))
+            // Merge so omitted fields (e.g. purchaseDate when null locally) are not deleted.
+            .set(bikeToMap(bike), SetOptions.merge())
             .await()
     }
 
@@ -58,20 +63,35 @@ class BikeRemoteDataSource(
             .document(uid)
             .collection(COLLECTION_BIKES)
 
-    private fun bikeToMap(bike: Bike): Map<String, Any> =
-        mapOf(
-            FIELD_ID to bike.id,
-            FIELD_NAME to bike.name,
-            FIELD_DISTANCE_METERS to bike.distanceMeters,
-            FIELD_COMPONENTS to bike.components.map { component ->
-                mapOf(
-                    FIELD_TYPE to component.type.name,
-                    FIELD_NAME to component.name,
-                    FIELD_NOTES to component.notes,
-                    FIELD_DATE_ADDED to component.dateAddedEpochMillis
-                )
+    private fun bikeToMap(bike: Bike): Map<String, Any> = buildMap {
+        put(FIELD_ID, bike.id)
+        put(FIELD_NAME, bike.name)
+        put(FIELD_DISTANCE_METERS, bike.distanceMeters)
+        bike.purchaseDateEpochMillis?.let { put(FIELD_PURCHASE_DATE, it) }
+        put(
+            FIELD_COMPONENTS,
+            bike.components.map { component ->
+                buildMap<String, Any> {
+                    put(FIELD_TYPE, component.type.name)
+                    put(FIELD_NAME, component.name)
+                    put(FIELD_NOTES, component.notes)
+                    component.dateAddedEpochMillis?.let { put(FIELD_DATE_ADDED, it) }
+                    component.lastServiceEpochMillis?.let { put(FIELD_LAST_SERVICE, it) }
+                    put(FIELD_TOTAL_DISTANCE, component.totalDistanceMeters)
+                    put(FIELD_DISTANCE_SINCE_SERVICE, component.distanceSinceServiceMeters)
+                    put(
+                        FIELD_PENDING_WORK,
+                        component.pendingWork.map { item ->
+                            mapOf(
+                                FIELD_ID to item.id,
+                                FIELD_DESCRIPTION to item.description
+                            )
+                        }
+                    )
+                }
             }
         )
+    }
 
     @Suppress("UNCHECKED_CAST")
     private fun parseComponents(raw: Any?): List<BikeComponent> {
@@ -83,19 +103,77 @@ class BikeRemoteDataSource(
                 ?: return@mapNotNull null
             val name = map[FIELD_NAME] as? String ?: return@mapNotNull null
             val notes = map[FIELD_NOTES] as? String ?: ""
-            val dateAdded = when (val value = map[FIELD_DATE_ADDED]) {
-                is Long -> value
-                is Number -> value.toLong()
-                else -> return@mapNotNull null
-            }
             BikeComponent(
                 type = type,
                 name = name,
                 notes = notes,
-                dateAddedEpochMillis = dateAdded
+                dateAddedEpochMillis = map.optionalLong(FIELD_DATE_ADDED),
+                lastServiceEpochMillis = map.optionalLong(FIELD_LAST_SERVICE),
+                totalDistanceMeters = map.optionalDouble(FIELD_TOTAL_DISTANCE) ?: 0.0,
+                distanceSinceServiceMeters = map.optionalDouble(FIELD_DISTANCE_SINCE_SERVICE) ?: 0.0,
+                pendingWork = parsePendingWork(map[FIELD_PENDING_WORK])
             )
         }
     }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun parsePendingWork(raw: Any?): List<PendingWorkItem> {
+        return when (raw) {
+            is List<*> -> raw.mapNotNull { entry ->
+                when (entry) {
+                    is Map<*, *> -> {
+                        val description = (entry[FIELD_DESCRIPTION] as? String)
+                            ?.takeIf { it.isNotBlank() }
+                            ?: (entry[FIELD_NAME] as? String)?.takeIf { it.isNotBlank() }
+                            ?: return@mapNotNull null
+                        PendingWorkItem(
+                            id = (entry[FIELD_ID] as? String)?.takeIf { it.isNotBlank() }
+                                ?: java.util.UUID.randomUUID().toString(),
+                            description = description
+                        )
+                    }
+                    is String -> entry.takeIf { it.isNotBlank() }?.let {
+                        PendingWorkItem(description = it)
+                    }
+                    else -> null
+                }
+            }
+            is String -> if (raw.isNotBlank()) {
+                listOf(PendingWorkItem(description = raw))
+            } else {
+                emptyList()
+            }
+            else -> emptyList()
+        }
+    }
+
+    private fun Map<*, *>.optionalLong(key: String): Long? =
+        when (val value = this[key]) {
+            is Long -> value
+            is Number -> value.toLong()
+            else -> null
+        }
+
+    private fun Map<*, *>.optionalDouble(key: String): Double? =
+        when (val value = this[key]) {
+            is Double -> value
+            is Number -> value.toDouble()
+            else -> null
+        }
+
+    private fun DocumentSnapshot.optionalLong(field: String): Long? =
+        when (val value = get(field)) {
+            is Long -> value
+            is Number -> value.toLong()
+            else -> null
+        }
+
+    private fun DocumentSnapshot.optionalDouble(field: String): Double? =
+        when (val value = get(field)) {
+            is Double -> value
+            is Number -> value.toDouble()
+            else -> null
+        }
 
     private companion object {
         const val COLLECTION_USERS = "users"
@@ -103,9 +181,15 @@ class BikeRemoteDataSource(
         const val FIELD_ID = "id"
         const val FIELD_NAME = "name"
         const val FIELD_DISTANCE_METERS = "distanceMeters"
+        const val FIELD_PURCHASE_DATE = "purchaseDate"
         const val FIELD_COMPONENTS = "components"
         const val FIELD_TYPE = "type"
         const val FIELD_NOTES = "notes"
         const val FIELD_DATE_ADDED = "dateAdded"
+        const val FIELD_LAST_SERVICE = "lastService"
+        const val FIELD_TOTAL_DISTANCE = "totalDistanceMeters"
+        const val FIELD_DISTANCE_SINCE_SERVICE = "distanceSinceServiceMeters"
+        const val FIELD_PENDING_WORK = "pendingWork"
+        const val FIELD_DESCRIPTION = "description"
     }
 }

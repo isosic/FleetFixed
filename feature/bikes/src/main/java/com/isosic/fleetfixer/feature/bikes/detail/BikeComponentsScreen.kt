@@ -1,5 +1,6 @@
 package com.isosic.fleetfixer.feature.bikes.detail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -29,6 +30,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,7 +40,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
+import androidx.lifecycle.repeatOnLifecycle
 import com.isosic.fleetfixer.core.model.Bike
 import com.isosic.fleetfixer.core.model.BikeComponent
 import com.isosic.fleetfixer.core.model.ComponentType
@@ -50,15 +56,26 @@ import java.util.Date
 @Composable
 fun BikeComponentsScreen(
     onNavigateBack: () -> Unit,
+    onComponentClick: (ComponentType) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: BikeDetailViewModel = koinViewModel()
 ) {
     val bike by viewModel.bike.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.onComponentsVisible()
+        }
+    }
 
     BikeComponentsScreenContent(
         bike = bike,
-        onNavigateBack = onNavigateBack,
-        onAddComponent = viewModel::addComponent,
+        onNavigateBack = dropUnlessResumed { onNavigateBack() },
+        onComponentClick = onComponentClick,
+        onAddComponent = { type, name, notes, dateAdded, onAdded ->
+            viewModel.addComponent(type, name, notes, dateAdded, onAdded)
+        },
         modifier = modifier
     )
 }
@@ -68,7 +85,8 @@ fun BikeComponentsScreen(
 private fun BikeComponentsScreenContent(
     bike: Bike?,
     onNavigateBack: () -> Unit,
-    onAddComponent: (ComponentType, String, String, Long) -> Unit,
+    onComponentClick: (ComponentType) -> Unit,
+    onAddComponent: (ComponentType, String, String, Long?, onAdded: () -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var componentToAdd by remember { mutableStateOf<ComponentType?>(null) }
@@ -113,7 +131,8 @@ private fun BikeComponentsScreenContent(
                     ComponentSlotRow(
                         type = type,
                         component = component,
-                        onAddClick = { componentToAdd = type }
+                        onAddClick = { componentToAdd = type },
+                        onClick = { onComponentClick(type) }
                     )
                     HorizontalDivider()
                 }
@@ -126,8 +145,10 @@ private fun BikeComponentsScreenContent(
             type = type,
             onDismiss = { componentToAdd = null },
             onSave = { name, notes, dateAdded ->
-                onAddComponent(type, name, notes, dateAdded)
-                componentToAdd = null
+                onAddComponent(type, name, notes, dateAdded) {
+                    componentToAdd = null
+                    onComponentClick(type)
+                }
             }
         )
     }
@@ -137,11 +158,19 @@ private fun BikeComponentsScreenContent(
 private fun ComponentSlotRow(
     type: ComponentType,
     component: BikeComponent?,
-    onAddClick: () -> Unit
+    onAddClick: () -> Unit,
+    onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (component != null) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                }
+            )
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -162,17 +191,6 @@ private fun ComponentSlotRow(
                     text = component.name,
                     style = MaterialTheme.typography.bodyLarge
                 )
-                Text(
-                    text = "Added ${formatDate(component.dateAddedEpochMillis)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (component.notes.isNotBlank()) {
-                    Text(
-                        text = component.notes,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
             }
         }
         if (component == null) {
@@ -188,12 +206,12 @@ private fun ComponentSlotRow(
 private fun AddComponentDialog(
     type: ComponentType,
     onDismiss: () -> Unit,
-    onSave: (name: String, notes: String, dateAddedEpochMillis: Long) -> Unit
+    onSave: (name: String, notes: String, dateAddedEpochMillis: Long?) -> Unit
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
     var dateAddedMillis by rememberSaveable {
-        mutableStateOf(System.currentTimeMillis())
+        mutableStateOf<Long?>(System.currentTimeMillis())
     }
     var showDatePicker by remember { mutableStateOf(false) }
     val isValid = name.isNotBlank()
@@ -219,7 +237,13 @@ private fun AddComponentDialog(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 TextButton(onClick = { showDatePicker = true }) {
-                    Text("Date added: ${formatDate(dateAddedMillis)}")
+                    Text(
+                        dateAddedMillis?.let { "Purchase date: ${formatDate(it)}" }
+                            ?: "Purchase date: not set"
+                    )
+                }
+                TextButton(onClick = { dateAddedMillis = null }) {
+                    Text("Clear purchase date")
                 }
             }
         },
@@ -240,7 +264,7 @@ private fun AddComponentDialog(
 
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = dateAddedMillis
+            initialSelectedDateMillis = dateAddedMillis ?: System.currentTimeMillis()
         )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
@@ -278,14 +302,13 @@ private fun BikeComponentsScreenContentPreview() {
                 components = listOf(
                     BikeComponent(
                         type = ComponentType.FORK,
-                        name = "Fox 36",
-                        notes = "150mm",
-                        dateAddedEpochMillis = System.currentTimeMillis()
+                        name = "Fox 36"
                     )
                 )
             ),
             onNavigateBack = {},
-            onAddComponent = { _, _, _, _ -> }
+            onComponentClick = {},
+            onAddComponent = { _, _, _, _, _ -> }
         )
     }
 }

@@ -3,6 +3,7 @@ package com.isosic.fleetfixer.core.domain
 import android.content.Context
 import android.net.Uri
 import com.isosic.fleetfixer.core.model.StravaAuthEvent
+import com.isosic.fleetfixer.core.model.StravaActivity
 import com.isosic.fleetfixer.core.model.StravaBike
 import com.isosic.fleetfixer.core.model.StravaTokens
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +24,7 @@ interface StravaAuthRepository {
 
 interface StravaBikeRemoteSource {
     suspend fun fetchAthleteBikes(): Result<List<StravaBike>>
+    suspend fun fetchActivities(afterEpochSeconds: Long? = null): Result<List<StravaActivity>>
 }
 
 interface StravaTokenStore {

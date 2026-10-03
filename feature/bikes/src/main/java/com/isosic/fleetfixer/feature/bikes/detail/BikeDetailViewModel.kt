@@ -4,6 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.isosic.fleetfixer.core.domain.BikeRepository
+import com.isosic.fleetfixer.core.domain.ComponentMileageRefresher
+import com.isosic.fleetfixer.core.domain.StravaAuthRepository
 import com.isosic.fleetfixer.core.model.Bike
 import com.isosic.fleetfixer.core.model.BikeComponent
 import com.isosic.fleetfixer.core.model.ComponentType
@@ -12,11 +14,14 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class BikeDetailViewModel(
     private val bikeRepository: BikeRepository,
+    private val stravaAuthRepository: StravaAuthRepository,
+    private val componentMileageRefresher: ComponentMileageRefresher,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -32,7 +37,25 @@ class BikeDetailViewModel(
     private val _events = MutableSharedFlow<BikeDetailEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<BikeDetailEvent> = _events.asSharedFlow()
 
-    fun addComponent(type: ComponentType, name: String, notes: String, dateAddedEpochMillis: Long) {
+    fun onDetailVisible() {
+        viewModelScope.launch {
+            refreshComponentMileageIfConnected()
+        }
+    }
+
+    fun onComponentsVisible() {
+        viewModelScope.launch {
+            refreshComponentMileageIfConnected()
+        }
+    }
+
+    fun addComponent(
+        type: ComponentType,
+        name: String,
+        notes: String,
+        dateAddedEpochMillis: Long?,
+        onAdded: () -> Unit = {}
+    ) {
         viewModelScope.launch {
             bikeRepository.addComponent(
                 bikeId = bikeId,
@@ -40,9 +63,12 @@ class BikeDetailViewModel(
                     type = type,
                     name = name.trim(),
                     notes = notes.trim(),
-                    dateAddedEpochMillis = dateAddedEpochMillis
+                    dateAddedEpochMillis = dateAddedEpochMillis,
+                    lastServiceEpochMillis = dateAddedEpochMillis
                 )
             )
+            refreshComponentMileageIfConnected()
+            onAdded()
         }
     }
 
@@ -51,6 +77,12 @@ class BikeDetailViewModel(
             bikeRepository.deleteBike(bikeId)
             _events.emit(BikeDetailEvent.Deleted)
         }
+    }
+
+    private suspend fun refreshComponentMileageIfConnected() {
+        val connected = stravaAuthRepository.isConnected.first()
+        if (!connected) return
+        componentMileageRefresher.updateBike(bikeId)
     }
 
     companion object {
