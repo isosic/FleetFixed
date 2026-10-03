@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -22,24 +23,25 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.google.firebase.auth.FirebaseAuth
+import com.isosic.fleetfixer.core.domain.AppAuth
+import com.isosic.fleetfixer.core.domain.StravaAuthRepository
+import com.isosic.fleetfixer.core.ui.theme.FleetFixerTheme
+import com.isosic.fleetfixer.feature.auth.ui.LoginScreen
+import com.isosic.fleetfixer.feature.bikes.addbike.AddBikeScreen
+import com.isosic.fleetfixer.feature.bikes.detail.BikeComponentsScreen
+import com.isosic.fleetfixer.feature.bikes.detail.BikeDetailScreen
+import com.isosic.fleetfixer.feature.bikes.detail.BikePendingWorkScreen
+import com.isosic.fleetfixer.feature.bikes.home.HomeScreen
 import com.isosic.fleetfixer.navigation.Routes
-import com.isosic.fleetfixer.screens.addbike.AddBikeScreen
-import com.isosic.fleetfixer.screens.bikedetail.BikeComponentsScreen
-import com.isosic.fleetfixer.screens.bikedetail.BikeDetailScreen
-import com.isosic.fleetfixer.screens.bikedetail.BikePendingWorkScreen
-import com.isosic.fleetfixer.screens.homescreen.HomeScreen
-import com.isosic.fleetfixer.screens.login.LoginScreen
-import com.isosic.fleetfixer.strava.StravaAuthClient
-import com.isosic.fleetfixer.ui.theme.FleetFixerTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
+import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
 class MainActivity : ComponentActivity() {
 
-    private val stravaAuthClient: StravaAuthClient by inject()
+    private val stravaAuthRepository: StravaAuthRepository by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,12 +49,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             FleetFixerTheme {
-                val firebaseAuth: FirebaseAuth = koinInject()
+                val appAuth: AppAuth = koinInject()
                 var startDestination by remember { mutableStateOf<String?>(null) }
                 val navController = rememberNavController()
 
-                LaunchedEffect(firebaseAuth) {
-                    startDestination = if (firebaseAuth.currentUser != null) {
+                LaunchedEffect(appAuth) {
+                    startDestination = if (appAuth.hasCurrentUser()) {
                         Routes.Home
                     } else {
                         Routes.Login
@@ -114,16 +116,21 @@ class MainActivity : ComponentActivity() {
                             )
                         ) { entry ->
                             val bikeId = checkNotNull(entry.arguments?.getString("bikeId"))
-                            BikeDetailScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                onComponentsClick = {
-                                    navController.navigate(Routes.bikeComponents(bikeId))
-                                },
-                                onPendingWorkClick = {
-                                    navController.navigate(Routes.bikePendingWork(bikeId))
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            key(bikeId) {
+                                BikeDetailScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    onComponentsClick = {
+                                        navController.navigate(Routes.bikeComponents(bikeId))
+                                    },
+                                    onPendingWorkClick = {
+                                        navController.navigate(Routes.bikePendingWork(bikeId))
+                                    },
+                                    viewModel = koinViewModel(
+                                        viewModelStoreOwner = entry
+                                    ),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
 
                         composable(
@@ -131,11 +138,16 @@ class MainActivity : ComponentActivity() {
                             arguments = listOf(
                                 navArgument("bikeId") { type = NavType.StringType }
                             )
-                        ) {
-                            BikeComponentsScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                        ) { entry ->
+                            key(entry.arguments?.getString("bikeId")) {
+                                BikeComponentsScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    viewModel = koinViewModel(
+                                        viewModelStoreOwner = entry
+                                    ),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
 
                         composable(
@@ -143,11 +155,16 @@ class MainActivity : ComponentActivity() {
                             arguments = listOf(
                                 navArgument("bikeId") { type = NavType.StringType }
                             )
-                        ) {
-                            BikePendingWorkScreen(
-                                onNavigateBack = { navController.popBackStack() },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                        ) { entry ->
+                            key(entry.arguments?.getString("bikeId")) {
+                                BikePendingWorkScreen(
+                                    onNavigateBack = { navController.popBackStack() },
+                                    viewModel = koinViewModel(
+                                        viewModelStoreOwner = entry
+                                    ),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
                     }
                 }
@@ -163,20 +180,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // onNewIntent runs before onResume for deep links; give it a moment to clear the flag.
         lifecycleScope.launch {
             delay(400)
-            stravaAuthClient.onHostResumedWithoutFreshCallback()
+            stravaAuthRepository.onHostResumedWithoutFreshCallback()
         }
     }
 
     private fun handleStravaIntent(intent: Intent?) {
         val uri = intent?.data ?: return
-        if (!stravaAuthClient.isCallbackUri(uri)) return
+        if (!stravaAuthRepository.isCallbackUri(uri)) return
         Log.i(TAG, "Handling Strava intent data=$uri")
         setIntent(Intent(intent).setData(null))
         lifecycleScope.launch {
-            stravaAuthClient.handleCallbackIntent(uri)
+            stravaAuthRepository.handleCallbackIntent(uri)
         }
     }
 

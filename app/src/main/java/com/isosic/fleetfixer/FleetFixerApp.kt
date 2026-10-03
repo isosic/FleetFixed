@@ -1,7 +1,7 @@
 package com.isosic.fleetfixer
 
 import android.app.Application
-import com.isosic.fleetfixer.di.appModule
+import com.isosic.fleetfixer.di.appModules
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
@@ -13,7 +13,7 @@ class FleetFixerApp : Application() {
         startKoin {
             androidLogger(Level.ERROR)
             androidContext(this@FleetFixerApp)
-            modules(appModule)
+            modules(appModules)
         }
     }
 }
