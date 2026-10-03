@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FleetFixer</string>
+    <string name="pending_work_notification_text">Your bike needs attention</string>
+    <string name="pending_work_notification_channel_name">Pending work</string>
+    <string name="pending_work_notification_channel_description">Alerts when your bike has new pending work</string>
 </resources>

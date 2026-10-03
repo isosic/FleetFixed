@@ -5,6 +5,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.isosic.fleetfixer.core.model.Bike
 import com.isosic.fleetfixer.core.model.BikeComponent
+import com.isosic.fleetfixer.core.model.CompletedWorkItem
 import com.isosic.fleetfixer.core.model.ComponentType
 import com.isosic.fleetfixer.core.model.PendingWorkItem
 import kotlinx.coroutines.channels.awaitClose
@@ -79,13 +80,28 @@ class BikeRemoteDataSource(
                     component.lastServiceEpochMillis?.let { put(FIELD_LAST_SERVICE, it) }
                     put(FIELD_TOTAL_DISTANCE, component.totalDistanceMeters)
                     put(FIELD_DISTANCE_SINCE_SERVICE, component.distanceSinceServiceMeters)
+                    put(FIELD_TOTAL_MOVING_TIME, component.totalMovingTimeSeconds)
+                    put(FIELD_MOVING_TIME_SINCE_SERVICE, component.movingTimeSinceServiceSeconds)
                     put(
                         FIELD_PENDING_WORK,
                         component.pendingWork.map { item ->
-                            mapOf(
-                                FIELD_ID to item.id,
-                                FIELD_DESCRIPTION to item.description
-                            )
+                            buildMap {
+                                put(FIELD_ID, item.id)
+                                put(FIELD_DESCRIPTION, item.description)
+                                item.ruleId?.let { put(FIELD_RULE_ID, it) }
+                            }
+                        }
+                    )
+                    put(
+                        FIELD_COMPLETED_WORK,
+                        component.completedWork.map { item ->
+                            buildMap {
+                                put(FIELD_ID, item.id)
+                                put(FIELD_DESCRIPTION, item.description)
+                                put(FIELD_NOTES, item.notes)
+                                put(FIELD_COMPLETED_AT, item.completedAtEpochMillis)
+                                item.ruleId?.let { put(FIELD_RULE_ID, it) }
+                            }
                         }
                     )
                 }
@@ -111,7 +127,10 @@ class BikeRemoteDataSource(
                 lastServiceEpochMillis = map.optionalLong(FIELD_LAST_SERVICE),
                 totalDistanceMeters = map.optionalDouble(FIELD_TOTAL_DISTANCE) ?: 0.0,
                 distanceSinceServiceMeters = map.optionalDouble(FIELD_DISTANCE_SINCE_SERVICE) ?: 0.0,
-                pendingWork = parsePendingWork(map[FIELD_PENDING_WORK])
+                totalMovingTimeSeconds = map.optionalLong(FIELD_TOTAL_MOVING_TIME) ?: 0L,
+                movingTimeSinceServiceSeconds = map.optionalLong(FIELD_MOVING_TIME_SINCE_SERVICE) ?: 0L,
+                pendingWork = parsePendingWork(map[FIELD_PENDING_WORK]),
+                completedWork = parseCompletedWork(map[FIELD_COMPLETED_WORK])
             )
         }
     }
@@ -129,7 +148,8 @@ class BikeRemoteDataSource(
                         PendingWorkItem(
                             id = (entry[FIELD_ID] as? String)?.takeIf { it.isNotBlank() }
                                 ?: java.util.UUID.randomUUID().toString(),
-                            description = description
+                            description = description,
+                            ruleId = (entry[FIELD_RULE_ID] as? String)?.takeIf { it.isNotBlank() }
                         )
                     }
                     is String -> entry.takeIf { it.isNotBlank() }?.let {
@@ -144,6 +164,25 @@ class BikeRemoteDataSource(
                 emptyList()
             }
             else -> emptyList()
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun parseCompletedWork(raw: Any?): List<CompletedWorkItem> {
+        val items = raw as? List<*> ?: return emptyList()
+        return items.mapNotNull { entry ->
+            val map = entry as? Map<*, *> ?: return@mapNotNull null
+            val description = (map[FIELD_DESCRIPTION] as? String)?.takeIf { it.isNotBlank() }
+                ?: return@mapNotNull null
+            val completedAt = map.optionalLong(FIELD_COMPLETED_AT) ?: return@mapNotNull null
+            CompletedWorkItem(
+                id = (map[FIELD_ID] as? String)?.takeIf { it.isNotBlank() }
+                    ?: java.util.UUID.randomUUID().toString(),
+                description = description,
+                notes = (map[FIELD_NOTES] as? String).orEmpty(),
+                completedAtEpochMillis = completedAt,
+                ruleId = (map[FIELD_RULE_ID] as? String)?.takeIf { it.isNotBlank() }
+            )
         }
     }
 
@@ -189,7 +228,12 @@ class BikeRemoteDataSource(
         const val FIELD_LAST_SERVICE = "lastService"
         const val FIELD_TOTAL_DISTANCE = "totalDistanceMeters"
         const val FIELD_DISTANCE_SINCE_SERVICE = "distanceSinceServiceMeters"
+        const val FIELD_TOTAL_MOVING_TIME = "totalMovingTimeSeconds"
+        const val FIELD_MOVING_TIME_SINCE_SERVICE = "movingTimeSinceServiceSeconds"
         const val FIELD_PENDING_WORK = "pendingWork"
+        const val FIELD_COMPLETED_WORK = "completedWork"
         const val FIELD_DESCRIPTION = "description"
+        const val FIELD_RULE_ID = "ruleId"
+        const val FIELD_COMPLETED_AT = "completedAt"
     }
 }

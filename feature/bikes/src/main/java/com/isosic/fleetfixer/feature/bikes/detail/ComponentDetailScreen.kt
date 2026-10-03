@@ -1,5 +1,11 @@
 package com.isosic.fleetfixer.feature.bikes.detail
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,7 +19,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -37,11 +42,14 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import com.isosic.fleetfixer.core.model.BikeComponent
+import com.isosic.fleetfixer.core.model.CompletedWorkItem
 import com.isosic.fleetfixer.core.model.ComponentType
 import com.isosic.fleetfixer.core.model.PendingWorkItem
 import com.isosic.fleetfixer.core.ui.formatDistanceKm
@@ -53,18 +61,43 @@ import java.util.Date
 @Composable
 fun ComponentDetailScreen(
     onNavigateBack: () -> Unit,
+    onPendingWorkClick: (workId: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: ComponentDetailViewModel = koinViewModel()
 ) {
     val component by viewModel.component.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var pendingDescription by remember { mutableStateOf<String?>(null) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        val description = pendingDescription
+        pendingDescription = null
+        if (description != null) {
+            viewModel.addPendingWork(description)
+        }
+    }
 
     ComponentDetailScreenContent(
         title = viewModel.componentTypeLabel,
         component = component,
         onNavigateBack = dropUnlessResumed { onNavigateBack() },
         onPurchaseDateChange = viewModel::updatePurchaseDate,
-        onAddPendingWork = viewModel::addPendingWork,
-        onRemovePendingWork = viewModel::removePendingWork,
+        onAddPendingWork = { description ->
+            val needsPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            if (needsPermission) {
+                pendingDescription = description
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                viewModel.addPendingWork(description)
+            }
+        },
+        onPendingWorkClick = onPendingWorkClick,
+        onAddCompletedWork = viewModel::addCompletedWork,
         modifier = modifier
     )
 }
@@ -77,11 +110,13 @@ private fun ComponentDetailScreenContent(
     onNavigateBack: () -> Unit,
     onPurchaseDateChange: (Long?) -> Unit,
     onAddPendingWork: (String) -> Unit,
-    onRemovePendingWork: (String) -> Unit,
+    onPendingWorkClick: (String) -> Unit,
+    onAddCompletedWork: (notes: String, performedAtEpochMillis: Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
     var showAddPendingWork by remember { mutableStateOf(false) }
+    var showAddWorklog by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -161,32 +196,59 @@ private fun ComponentDetailScreenContent(
                     if (component.pendingWork.isEmpty()) {
                         Text(
                             text = "No pending work",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                        Text(
-                            text = "Add pending work on a component to see it here.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         component.pendingWork.forEach { item ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
+                            Text(
+                                text = item.description,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPendingWorkClick(item.id) }
+                                    .padding(vertical = 8.dp)
+                            )
+                            HorizontalDivider()
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Worklog",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { showAddWorklog = true }) {
+                            Text("Add")
+                        }
+                    }
+                    if (component.completedWork.isEmpty()) {
+                        Text(
+                            text = "No worklog entries yet",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        component.completedWork.forEach { item ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
                             ) {
                                 Text(
-                                    text = item.description,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier.weight(1f)
+                                    text = item.notes.ifBlank { item.description },
+                                    style = MaterialTheme.typography.bodyLarge
                                 )
-                                IconButton(onClick = { onRemovePendingWork(item.id) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Remove pending work"
-                                    )
-                                }
+                                Text(
+                                    text = formatDate(item.completedAtEpochMillis),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                             HorizontalDivider()
                         }
@@ -233,6 +295,16 @@ private fun ComponentDetailScreenContent(
             }
         )
     }
+
+    if (showAddWorklog) {
+        AddWorklogDialog(
+            onDismiss = { showAddWorklog = false },
+            onSave = { notes, performedAt ->
+                onAddCompletedWork(notes, performedAt)
+                showAddWorklog = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -269,6 +341,77 @@ private fun AddPendingWorkDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddWorklogDialog(
+    onDismiss: () -> Unit,
+    onSave: (notes: String, performedAtEpochMillis: Long) -> Unit
+) {
+    var notes by rememberSaveable { mutableStateOf("") }
+    var performedAtEpochMillis by rememberSaveable {
+        mutableStateOf(System.currentTimeMillis())
+    }
+    var showPerformedDatePicker by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add worklog entry") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes") },
+                    minLines = 3,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                TextButton(onClick = { showPerformedDatePicker = true }) {
+                    Text("Date performed: ${formatDate(performedAtEpochMillis)}")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(notes, performedAtEpochMillis) },
+                enabled = notes.isNotBlank()
+            ) {
+                Text("Add")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+
+    if (showPerformedDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = performedAtEpochMillis
+        )
+        DatePickerDialog(
+            onDismissRequest = { showPerformedDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { performedAtEpochMillis = it }
+                        showPerformedDatePicker = false
+                    }
+                ) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPerformedDatePicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+}
+
 private fun formatDate(epochMillis: Long): String =
     DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(epochMillis))
 
@@ -287,12 +430,20 @@ private fun ComponentDetailScreenContentPreview() {
                 pendingWork = listOf(
                     PendingWorkItem(description = "Replace seals"),
                     PendingWorkItem(description = "Check air pressure")
+                ),
+                completedWork = listOf(
+                    CompletedWorkItem(
+                        description = "Lower leg service",
+                        notes = "Replaced foam rings and oil",
+                        completedAtEpochMillis = System.currentTimeMillis()
+                    )
                 )
             ),
             onNavigateBack = {},
             onPurchaseDateChange = {},
             onAddPendingWork = {},
-            onRemovePendingWork = {}
+            onPendingWorkClick = {},
+            onAddCompletedWork = { _, _ -> }
         )
     }
 }

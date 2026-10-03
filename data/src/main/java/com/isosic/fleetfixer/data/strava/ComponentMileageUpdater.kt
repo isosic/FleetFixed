@@ -3,6 +3,8 @@ package com.isosic.fleetfixer.data.strava
 import com.isosic.fleetfixer.core.domain.BikeRepository
 import com.isosic.fleetfixer.core.domain.ComponentMileageCalculator
 import com.isosic.fleetfixer.core.domain.ComponentMileageRefresher
+import com.isosic.fleetfixer.core.domain.PendingWorkDecider
+import com.isosic.fleetfixer.core.domain.PendingWorkNotifier
 import com.isosic.fleetfixer.core.domain.StravaBikeRemoteSource
 import com.isosic.fleetfixer.core.model.Bike
 import com.isosic.fleetfixer.core.model.StravaActivity
@@ -10,7 +12,8 @@ import kotlinx.coroutines.flow.first
 
 class ComponentMileageUpdater(
     private val bikeRepository: BikeRepository,
-    private val stravaBikeRemoteSource: StravaBikeRemoteSource
+    private val stravaBikeRemoteSource: StravaBikeRemoteSource,
+    private val pendingWorkNotifier: PendingWorkNotifier
 ) : ComponentMileageRefresher {
 
     override suspend fun updateAllBikesWithComponents(): Result<Unit> = runCatching {
@@ -42,9 +45,13 @@ class ComponentMileageUpdater(
         activities: List<StravaActivity>
     ) {
         bikes.forEach { bike ->
-            val updated = ComponentMileageCalculator.withStravaDerivedFields(bike, activities)
+            val withUsage = ComponentMileageCalculator.withStravaDerivedFields(bike, activities)
+            val updated = PendingWorkDecider.apply(withUsage)
             if (updated != bike) {
                 bikeRepository.addBike(updated)
+                if (PendingWorkDecider.hasNewScheduledWork(bike, updated)) {
+                    pendingWorkNotifier.notifyPendingWorkAdded(bike.id)
+                }
             }
         }
     }

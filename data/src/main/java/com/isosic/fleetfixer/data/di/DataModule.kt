@@ -54,5 +54,5 @@ val dataModule = module {
     single<StravaTokenStore> { StravaTokenStoreImpl(androidContext()) }
     single<StravaAuthRepository> { StravaAuthClient(get()) }
     single<StravaBikeRemoteSource> { StravaApiClient(get()) }
-    single<ComponentMileageRefresher> { ComponentMileageUpdater(get(), get()) }
+    single<ComponentMileageRefresher> { ComponentMileageUpdater(get(), get(), get()) }
 }

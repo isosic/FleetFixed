@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.isosic.fleetfixer.core.domain.BikeRepository
 import com.isosic.fleetfixer.core.domain.ComponentMileageRefresher
+import com.isosic.fleetfixer.core.domain.PendingWorkNotifier
 import com.isosic.fleetfixer.core.domain.StravaAuthRepository
 import com.isosic.fleetfixer.core.model.BikeComponent
+import com.isosic.fleetfixer.core.model.CompletedWorkItem
 import com.isosic.fleetfixer.core.model.ComponentType
 import com.isosic.fleetfixer.core.model.PendingWorkItem
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,6 +22,7 @@ class ComponentDetailViewModel(
     private val bikeRepository: BikeRepository,
     private val stravaAuthRepository: StravaAuthRepository,
     private val componentMileageRefresher: ComponentMileageRefresher,
+    private val pendingWorkNotifier: PendingWorkNotifier,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -65,16 +68,24 @@ class ComponentDetailViewModel(
                     pendingWork = existing.pendingWork + PendingWorkItem(description = trimmed)
                 )
             )
+            pendingWorkNotifier.notifyPendingWorkAdded(bikeId)
         }
     }
 
-    fun removePendingWork(itemId: String) {
+    fun addCompletedWork(notes: String, performedAtEpochMillis: Long) {
+        val trimmedNotes = notes.trim()
+        if (trimmedNotes.isEmpty()) return
         viewModelScope.launch {
             val existing = component.value ?: return@launch
+            val entry = CompletedWorkItem(
+                description = trimmedNotes.lineSequence().first().trim(),
+                notes = trimmedNotes,
+                completedAtEpochMillis = performedAtEpochMillis
+            )
             bikeRepository.updateComponent(
                 bikeId,
                 existing.copy(
-                    pendingWork = existing.pendingWork.filterNot { it.id == itemId }
+                    completedWork = listOf(entry) + existing.completedWork
                 )
             )
         }

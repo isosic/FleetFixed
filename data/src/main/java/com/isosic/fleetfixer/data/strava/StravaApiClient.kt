@@ -122,6 +122,7 @@ class StravaApiClient(
                     StravaActivity(
                         id = id,
                         distanceMeters = activity.optDouble("distance", 0.0),
+                        movingTimeSeconds = activity.optLong("moving_time", 0L),
                         startDateEpochSeconds = startEpochSeconds,
                         gearId = gearId
                     )

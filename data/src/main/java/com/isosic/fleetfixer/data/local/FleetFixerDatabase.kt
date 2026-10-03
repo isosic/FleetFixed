@@ -7,7 +7,7 @@ import com.isosic.fleetfixer.core.model.Bike
 
 @Database(
     entities = [Bike::class],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

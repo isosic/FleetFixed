@@ -12,7 +12,7 @@ object ComponentMileageCalculator {
     ): Bike {
         val gearActivities = activities.filter { it.gearId == bike.id }
         val withPurchaseDate = bike.withPurchaseDateFromFirstActivity(gearActivities)
-        return applyMileage(withPurchaseDate, gearActivities)
+        return applyUsage(withPurchaseDate, gearActivities)
     }
 
     fun withUpdatedMileage(
@@ -21,18 +21,20 @@ object ComponentMileageCalculator {
     ): Bike {
         if (bike.components.isEmpty()) return bike
         val gearActivities = activities.filter { it.gearId == bike.id }
-        return applyMileage(bike, gearActivities)
+        return applyUsage(bike, gearActivities)
     }
 
-    private fun applyMileage(
+    private fun applyUsage(
         bike: Bike,
         gearActivities: List<StravaActivity>
     ): Bike {
         if (bike.components.isEmpty()) return bike
+        val fallbackMovingTimeSeconds = gearActivities.sumOf { it.movingTimeSeconds }
         val updatedComponents = bike.components.map { component ->
-            component.withCalculatedMileage(
+            component.withCalculatedUsage(
                 gearActivities = gearActivities,
-                fallbackTotalMeters = bike.distanceMeters
+                fallbackTotalMeters = bike.distanceMeters,
+                fallbackMovingTimeSeconds = fallbackMovingTimeSeconds
             )
         }
         return if (updatedComponents == bike.components) {
@@ -51,10 +53,12 @@ object ComponentMileageCalculator {
         return copy(purchaseDateEpochMillis = firstRideEpochSeconds * 1_000L)
     }
 
-    private fun BikeComponent.withCalculatedMileage(
+    private fun BikeComponent.withCalculatedUsage(
         gearActivities: List<StravaActivity>,
-        fallbackTotalMeters: Double
+        fallbackTotalMeters: Double,
+        fallbackMovingTimeSeconds: Long
     ): BikeComponent {
+        val sinceServiceEpoch = lastServiceEpochMillis ?: dateAddedEpochMillis
         val total = distanceSince(
             activities = gearActivities,
             sinceEpochMillis = dateAddedEpochMillis,
@@ -62,18 +66,32 @@ object ComponentMileageCalculator {
         )
         val sinceService = distanceSince(
             activities = gearActivities,
-            sinceEpochMillis = lastServiceEpochMillis ?: dateAddedEpochMillis,
+            sinceEpochMillis = sinceServiceEpoch,
             fallbackMeters = fallbackTotalMeters
+        )
+        val totalMoving = movingTimeSince(
+            activities = gearActivities,
+            sinceEpochMillis = dateAddedEpochMillis,
+            fallbackSeconds = fallbackMovingTimeSeconds
+        )
+        val movingSinceService = movingTimeSince(
+            activities = gearActivities,
+            sinceEpochMillis = sinceServiceEpoch,
+            fallbackSeconds = fallbackMovingTimeSeconds
         )
         return if (
             totalDistanceMeters == total &&
-            distanceSinceServiceMeters == sinceService
+            distanceSinceServiceMeters == sinceService &&
+            totalMovingTimeSeconds == totalMoving &&
+            movingTimeSinceServiceSeconds == movingSinceService
         ) {
             this
         } else {
             copy(
                 totalDistanceMeters = total,
-                distanceSinceServiceMeters = sinceService
+                distanceSinceServiceMeters = sinceService,
+                totalMovingTimeSeconds = totalMoving,
+                movingTimeSinceServiceSeconds = movingSinceService
             )
         }
     }
@@ -89,5 +107,18 @@ object ComponentMileageCalculator {
             .asSequence()
             .filter { it.startDateEpochSeconds >= sinceEpochSeconds }
             .sumOf { it.distanceMeters }
+    }
+
+    private fun movingTimeSince(
+        activities: List<StravaActivity>,
+        sinceEpochMillis: Long?,
+        fallbackSeconds: Long
+    ): Long {
+        if (sinceEpochMillis == null) return fallbackSeconds
+        val sinceEpochSeconds = sinceEpochMillis / 1_000L
+        return activities
+            .asSequence()
+            .filter { it.startDateEpochSeconds >= sinceEpochSeconds }
+            .sumOf { it.movingTimeSeconds }
     }
 }

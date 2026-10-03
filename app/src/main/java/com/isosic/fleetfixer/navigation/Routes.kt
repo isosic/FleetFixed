@@ -8,6 +8,8 @@ object Routes {
     const val BikeComponents = "bike_detail/{bikeId}/components"
     const val ComponentDetail = "bike_detail/{bikeId}/components/{componentType}"
     const val BikePendingWork = "bike_detail/{bikeId}/pending_work"
+    const val PendingWorkDetail =
+        "bike_detail/{bikeId}/components/{componentType}/pending_work/{workId}"
 
     fun bikeDetail(bikeId: String): String =
         "bike_detail/${android.net.Uri.encode(bikeId)}"
@@ -20,4 +22,8 @@ object Routes {
 
     fun bikePendingWork(bikeId: String): String =
         "bike_detail/${android.net.Uri.encode(bikeId)}/pending_work"
+
+    fun pendingWorkDetail(bikeId: String, componentType: String, workId: String): String =
+        "bike_detail/${android.net.Uri.encode(bikeId)}/components/" +
+            "${android.net.Uri.encode(componentType)}/pending_work/${android.net.Uri.encode(workId)}"
 }

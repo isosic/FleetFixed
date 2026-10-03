@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -32,9 +33,12 @@ import com.isosic.fleetfixer.feature.bikes.detail.BikeComponentsScreen
 import com.isosic.fleetfixer.feature.bikes.detail.BikeDetailScreen
 import com.isosic.fleetfixer.feature.bikes.detail.BikePendingWorkScreen
 import com.isosic.fleetfixer.feature.bikes.detail.ComponentDetailScreen
+import com.isosic.fleetfixer.feature.bikes.detail.PendingWorkDetailScreen
 import com.isosic.fleetfixer.feature.bikes.home.HomeScreen
 import com.isosic.fleetfixer.navigation.Routes
+import com.isosic.fleetfixer.notifications.PendingWorkNotifierImpl
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.compose.koinViewModel
@@ -43,15 +47,18 @@ import org.koin.compose.koinInject
 class MainActivity : ComponentActivity() {
 
     private val stravaAuthRepository: StravaAuthRepository by inject()
+    private val openBikeIdFlow = MutableStateFlow<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         handleStravaIntent(intent)
+        openBikeIdFlow.value = intent.getStringExtra(PendingWorkNotifierImpl.EXTRA_OPEN_BIKE_ID)
         enableEdgeToEdge()
         setContent {
             FleetFixerTheme {
                 val appAuth: AppAuth = koinInject()
                 var startDestination by remember { mutableStateOf<String?>(null) }
+                val openBikeId by openBikeIdFlow.collectAsState()
                 val navController = rememberNavController()
 
                 LaunchedEffect(appAuth) {
@@ -60,6 +67,16 @@ class MainActivity : ComponentActivity() {
                     } else {
                         Routes.Login
                     }
+                }
+
+                LaunchedEffect(startDestination, openBikeId) {
+                    val bikeId = openBikeId ?: return@LaunchedEffect
+                    if (startDestination != Routes.Home) return@LaunchedEffect
+                    navController.navigate(Routes.bikeDetail(bikeId)) {
+                        launchSingleTop = true
+                    }
+                    openBikeIdFlow.value = null
+                    intent.removeExtra(PendingWorkNotifierImpl.EXTRA_OPEN_BIKE_ID)
                 }
 
                 val destination = startDestination
@@ -141,11 +158,44 @@ class MainActivity : ComponentActivity() {
                                 navArgument("componentType") { type = NavType.StringType }
                             )
                         ) { entry ->
+                            val bikeId = checkNotNull(entry.arguments?.getString("bikeId"))
+                            val componentType = checkNotNull(
+                                entry.arguments?.getString("componentType")
+                            )
+                            key(bikeId, componentType) {
+                                ComponentDetailScreen(
+                                    onNavigateBack = { navController.navigateUp() },
+                                    onPendingWorkClick = { workId ->
+                                        navController.navigate(
+                                            Routes.pendingWorkDetail(
+                                                bikeId = bikeId,
+                                                componentType = componentType,
+                                                workId = workId
+                                            )
+                                        )
+                                    },
+                                    viewModel = koinViewModel(
+                                        viewModelStoreOwner = entry
+                                    ),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+
+                        composable(
+                            route = Routes.PendingWorkDetail,
+                            arguments = listOf(
+                                navArgument("bikeId") { type = NavType.StringType },
+                                navArgument("componentType") { type = NavType.StringType },
+                                navArgument("workId") { type = NavType.StringType }
+                            )
+                        ) { entry ->
                             key(
                                 entry.arguments?.getString("bikeId"),
-                                entry.arguments?.getString("componentType")
+                                entry.arguments?.getString("componentType"),
+                                entry.arguments?.getString("workId")
                             ) {
-                                ComponentDetailScreen(
+                                PendingWorkDetailScreen(
                                     onNavigateBack = { navController.navigateUp() },
                                     viewModel = koinViewModel(
                                         viewModelStoreOwner = entry
@@ -188,9 +238,13 @@ class MainActivity : ComponentActivity() {
                             key(bikeId) {
                                 BikePendingWorkScreen(
                                     onNavigateBack = { navController.navigateUp() },
-                                    onComponentClick = { type ->
+                                    onPendingWorkClick = { type, workId ->
                                         navController.navigate(
-                                            Routes.componentDetail(bikeId, type.name)
+                                            Routes.pendingWorkDetail(
+                                                bikeId = bikeId,
+                                                componentType = type.name,
+                                                workId = workId
+                                            )
                                         )
                                     },
                                     viewModel = koinViewModel(
@@ -210,6 +264,7 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleStravaIntent(intent)
+        openBikeIdFlow.value = intent.getStringExtra(PendingWorkNotifierImpl.EXTRA_OPEN_BIKE_ID)
     }
 
     override fun onResume() {
