@@ -27,6 +27,7 @@ class BikeRemoteDataSource(
                         Bike(
                             id = document.id,
                             name = name,
+                            distanceMeters = document.getDouble(FIELD_DISTANCE_METERS) ?: 0.0,
                             components = parseComponents(document.get(FIELD_COMPONENTS))
                         )
                     }
@@ -61,6 +62,7 @@ class BikeRemoteDataSource(
         mapOf(
             FIELD_ID to bike.id,
             FIELD_NAME to bike.name,
+            FIELD_DISTANCE_METERS to bike.distanceMeters,
             FIELD_COMPONENTS to bike.components.map { component ->
                 mapOf(
                     FIELD_TYPE to component.type.name,
@@ -100,6 +102,7 @@ class BikeRemoteDataSource(
         const val COLLECTION_BIKES = "bikes"
         const val FIELD_ID = "id"
         const val FIELD_NAME = "name"
+        const val FIELD_DISTANCE_METERS = "distanceMeters"
         const val FIELD_COMPONENTS = "components"
         const val FIELD_TYPE = "type"
         const val FIELD_NOTES = "notes"

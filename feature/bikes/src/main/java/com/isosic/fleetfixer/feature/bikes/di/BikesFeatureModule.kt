@@ -7,7 +7,7 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val bikesFeatureModule = module {
-    viewModel { HomeScreenViewModel(get(), get(), get(), get(), get(), get(), get()) }
+    viewModel { HomeScreenViewModel(get(), get(), get(), get(), get(), get(), get(), get()) }
     viewModel { AddBikeViewModel(get()) }
     viewModel { BikeDetailViewModel(get(), get()) }
 }

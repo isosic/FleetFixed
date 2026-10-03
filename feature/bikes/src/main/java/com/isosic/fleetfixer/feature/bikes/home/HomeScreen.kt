@@ -1,5 +1,6 @@
 package com.isosic.fleetfixer.feature.bikes.home
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.isosic.fleetfixer.core.model.Bike
 import com.isosic.fleetfixer.core.ui.theme.FleetFixerTheme
+import java.util.Locale
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -62,6 +64,7 @@ fun HomeScreen(
     viewModel: HomeScreenViewModel = koinViewModel()
 ) {
     val bikes by viewModel.bikes.collectAsStateWithLifecycle()
+    val selectedBike by viewModel.selectedBike.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -83,11 +86,13 @@ fun HomeScreen(
 
     HomeScreenContent(
         bikes = bikes,
+        selectedBike = selectedBike,
         isStravaConnected = uiState.isStravaConnected,
         isStravaBusy = uiState.isStravaBusy,
         snackbarHostState = snackbarHostState,
         onAddBikeClick = onAddBikeClick,
-        onBikeClick = onBikeClick,
+        onBikeSelect = viewModel::selectBike,
+        onSelectedBikeClick = onBikeClick,
         onStravaClick = { viewModel.onStravaClick(context) },
         onImportStravaBikesClick = viewModel::importStravaBikes,
         onLogoutClick = {
@@ -170,11 +175,13 @@ private fun StravaBikeLinkDialog(
 @Composable
 private fun HomeScreenContent(
     bikes: List<Bike>,
+    selectedBike: Bike?,
     isStravaConnected: Boolean,
     isStravaBusy: Boolean,
     snackbarHostState: SnackbarHostState,
     onAddBikeClick: () -> Unit,
-    onBikeClick: (Bike) -> Unit,
+    onBikeSelect: (String) -> Unit,
+    onSelectedBikeClick: (Bike) -> Unit,
     onStravaClick: () -> Unit,
     onImportStravaBikesClick: () -> Unit,
     onLogoutClick: () -> Unit,
@@ -207,11 +214,11 @@ private fun HomeScreenContent(
                             items(bikes, key = { it.id }) { bike ->
                                 NavigationDrawerItem(
                                     label = { Text(bike.name) },
-                                    selected = false,
+                                    selected = selectedBike?.id == bike.id,
                                     onClick = {
                                         scope.launch {
+                                            onBikeSelect(bike.id)
                                             drawerState.close()
-                                            onBikeClick(bike)
                                         }
                                     },
                                     modifier = Modifier.padding(horizontal = 12.dp)
@@ -299,19 +306,36 @@ private fun HomeScreenContent(
                         .fillMaxWidth()
                         .padding(24.dp)
                 ) {
-                    Text(
-                        text = if (bikes.isEmpty()) {
-                            "No bikes in your fleet"
-                        } else {
-                            "${bikes.size} bike${if (bikes.size == 1) "" else "s"} in your fleet"
-                        },
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "Open the drawer to see your bikes, or tap + to add one.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    when {
+                        selectedBike != null -> {
+                            SelectedBikeInfo(
+                                bike = selectedBike,
+                                onClick = { onSelectedBikeClick(selectedBike) }
+                            )
+                        }
+                        bikes.isEmpty() -> {
+                            Text(
+                                text = "No bikes in your fleet",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Open the drawer to see your bikes, or tap + to add one.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        else -> {
+                            Text(
+                                text = "${bikes.size} bikes in your fleet",
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                text = "Select a bike from the drawer to see its details.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = if (isStravaConnected) {
@@ -328,20 +352,63 @@ private fun HomeScreenContent(
     }
 }
 
+@Composable
+private fun SelectedBikeInfo(
+    bike: Bike,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(8.dp)
+    ) {
+        Text(
+            text = bike.name,
+            style = MaterialTheme.typography.headlineSmall
+        )
+        Text(
+            text = formatDistanceKm(bike.distanceMeters),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = "Tap for bike details",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun formatDistanceKm(distanceMeters: Double): String {
+    val km = distanceMeters / 1_000.0
+    val formatted = if (km < 10.0) {
+        String.format(Locale.getDefault(), "%.1f", km)
+    } else {
+        String.format(Locale.getDefault(), "%.0f", km)
+    }
+    return "$formatted km"
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun HomeScreenContentPreview() {
     FleetFixerTheme {
         HomeScreenContent(
             bikes = listOf(
-                Bike(name = "Trail Rider"),
-                Bike(name = "City Commuter")
+                Bike(name = "Trail Rider", distanceMeters = 12_450.0),
+                Bike(name = "City Commuter", distanceMeters = 3_200.0)
             ),
+            selectedBike = Bike(name = "Trail Rider", distanceMeters = 12_450.0),
             isStravaConnected = true,
             isStravaBusy = false,
             snackbarHostState = SnackbarHostState(),
             onAddBikeClick = {},
-            onBikeClick = {},
+            onBikeSelect = {},
+            onSelectedBikeClick = {},
             onStravaClick = {},
             onImportStravaBikesClick = {},
             onLogoutClick = {}

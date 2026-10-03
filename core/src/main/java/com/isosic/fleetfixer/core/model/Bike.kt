@@ -8,6 +8,7 @@ import java.util.UUID
 data class Bike(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     val name: String,
+    val distanceMeters: Double = 0.0,
     val components: List<BikeComponent> = emptyList()
 ) {
     fun componentFor(type: ComponentType): BikeComponent? =

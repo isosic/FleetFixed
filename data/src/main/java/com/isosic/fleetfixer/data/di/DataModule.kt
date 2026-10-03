@@ -7,6 +7,7 @@ import com.isosic.fleetfixer.core.domain.AppAuth
 import com.isosic.fleetfixer.core.domain.AuthTokenStore
 import com.isosic.fleetfixer.core.domain.BikeRepository
 import com.isosic.fleetfixer.core.domain.GoogleSignInGateway
+import com.isosic.fleetfixer.core.domain.SelectedBikeStore
 import com.isosic.fleetfixer.core.domain.StravaAuthRepository
 import com.isosic.fleetfixer.core.domain.StravaBikeRemoteSource
 import com.isosic.fleetfixer.core.domain.StravaTokenStore
@@ -14,6 +15,7 @@ import com.isosic.fleetfixer.data.auth.AuthTokenStoreImpl
 import com.isosic.fleetfixer.data.auth.FirebaseAppAuth
 import com.isosic.fleetfixer.data.auth.GoogleAuthClient
 import com.isosic.fleetfixer.data.local.FleetFixerDatabase
+import com.isosic.fleetfixer.data.local.SelectedBikeStoreImpl
 import com.isosic.fleetfixer.data.remote.BikeRemoteDataSource
 import com.isosic.fleetfixer.data.repository.BikeRepositoryImpl
 import com.isosic.fleetfixer.data.strava.StravaApiClient
@@ -24,6 +26,7 @@ import org.koin.dsl.module
 
 val dataModule = module {
     single<AuthTokenStore> { AuthTokenStoreImpl(androidContext()) }
+    single<SelectedBikeStore> { SelectedBikeStoreImpl(androidContext()) }
     single<GoogleSignInGateway> { GoogleAuthClient(androidContext()) }
     single { FirebaseAuth.getInstance() }
     single { FirebaseFirestore.getInstance() }

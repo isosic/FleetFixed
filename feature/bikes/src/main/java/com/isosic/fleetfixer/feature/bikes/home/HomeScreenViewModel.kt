@@ -7,6 +7,7 @@ import com.isosic.fleetfixer.core.domain.AppAuth
 import com.isosic.fleetfixer.core.domain.AuthTokenStore
 import com.isosic.fleetfixer.core.domain.BikeRepository
 import com.isosic.fleetfixer.core.domain.GoogleSignInGateway
+import com.isosic.fleetfixer.core.domain.SelectedBikeStore
 import com.isosic.fleetfixer.core.domain.StravaAuthRepository
 import com.isosic.fleetfixer.core.domain.StravaBikeRemoteSource
 import com.isosic.fleetfixer.core.domain.StravaTokenStore
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -41,7 +43,8 @@ class HomeScreenViewModel(
     private val appAuth: AppAuth,
     private val stravaTokenStore: StravaTokenStore,
     private val stravaAuthRepository: StravaAuthRepository,
-    private val stravaBikeRemoteSource: StravaBikeRemoteSource
+    private val stravaBikeRemoteSource: StravaBikeRemoteSource,
+    private val selectedBikeStore: SelectedBikeStore
 ) : ViewModel() {
 
     val bikes: StateFlow<List<Bike>> = bikeRepository.observeBikes()
@@ -50,6 +53,22 @@ class HomeScreenViewModel(
             started = SharingStarted.WhileSubscribed(5_000),
             initialValue = emptyList()
         )
+
+    val selectedBike: StateFlow<Bike?> = combine(
+        bikes,
+        selectedBikeStore.selectedBikeId
+    ) { bikeList, selectedId ->
+        when {
+            bikeList.isEmpty() -> null
+            bikeList.size == 1 -> bikeList.first()
+            selectedId != null -> bikeList.find { it.id == selectedId }
+            else -> null
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = null
+    )
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -85,6 +104,29 @@ class HomeScreenViewModel(
                 }
             }
         }
+        viewModelScope.launch {
+            combine(bikes, selectedBikeStore.selectedBikeId) { bikeList, selectedId ->
+                bikeList to selectedId
+            }.collect { (bikeList, selectedId) ->
+                when {
+                    bikeList.isEmpty() -> {
+                        if (selectedId != null) selectedBikeStore.clear()
+                    }
+                    bikeList.size == 1 && selectedId != bikeList.first().id -> {
+                        selectedBikeStore.select(bikeList.first().id)
+                    }
+                    selectedId != null && bikeList.none { it.id == selectedId } -> {
+                        selectedBikeStore.clear()
+                    }
+                }
+            }
+        }
+    }
+
+    fun selectBike(bikeId: String) {
+        viewModelScope.launch {
+            selectedBikeStore.select(bikeId)
+        }
     }
 
     fun onStravaClick(context: Context) {
@@ -119,10 +161,17 @@ class HomeScreenViewModel(
         val prompt = _uiState.value.stravaLinkPrompt ?: return
         viewModelScope.launch {
             val localBike = prompt.candidates.firstOrNull { it.id == localBikeId } ?: return@launch
+            val wasSelected = selectedBikeStore.selectedBikeId.first() == localBike.id
             bikeRepository.replaceBikeId(
                 oldBikeId = localBike.id,
-                updatedBike = localBike.copy(id = prompt.stravaBike.id)
+                updatedBike = localBike.copy(
+                    id = prompt.stravaBike.id,
+                    distanceMeters = prompt.stravaBike.distanceMeters
+                )
             )
+            if (wasSelected) {
+                selectedBikeStore.select(prompt.stravaBike.id)
+            }
             consumedLocalBikeIds.add(localBike.id)
             advanceLinkQueue()
         }
@@ -131,12 +180,7 @@ class HomeScreenViewModel(
     fun importStravaBikeAsNew() {
         val prompt = _uiState.value.stravaLinkPrompt ?: return
         viewModelScope.launch {
-            bikeRepository.addBike(
-                Bike(
-                    id = prompt.stravaBike.id,
-                    name = prompt.stravaBike.name
-                )
-            )
+            bikeRepository.addBike(prompt.stravaBike.toBike())
             advanceLinkQueue()
         }
     }
@@ -151,6 +195,8 @@ class HomeScreenViewModel(
         val existingIds = localBikes.map { it.id }.toSet()
         val bikesToProcess = stravaBikes.filterNot { it.id in existingIds }
         val linkableLocalBikes = localBikes.filterNot { isLikelyStravaId(it.id) }
+
+        syncDistanceForLinkedBikes(localBikes, stravaBikes)
 
         pendingStravaBikes.clear()
         pendingStravaBikes.addAll(bikesToProcess)
@@ -172,7 +218,7 @@ class HomeScreenViewModel(
             }
             linkableLocalBikes.isEmpty() -> {
                 bikesToProcess.forEach { stravaBike ->
-                    bikeRepository.addBike(Bike(id = stravaBike.id, name = stravaBike.name))
+                    bikeRepository.addBike(stravaBike.toBike())
                 }
                 _uiState.update {
                     it.copy(
@@ -183,6 +229,19 @@ class HomeScreenViewModel(
                 }
             }
             else -> showNextPrompt()
+        }
+    }
+
+    private suspend fun syncDistanceForLinkedBikes(
+        localBikes: List<Bike>,
+        stravaBikes: List<StravaBike>
+    ) {
+        val localById = localBikes.associateBy { it.id }
+        stravaBikes.forEach { stravaBike ->
+            val local = localById[stravaBike.id] ?: return@forEach
+            if (local.distanceMeters != stravaBike.distanceMeters) {
+                bikeRepository.addBike(local.copy(distanceMeters = stravaBike.distanceMeters))
+            }
         }
     }
 
@@ -214,7 +273,7 @@ class HomeScreenViewModel(
         if (candidates.isEmpty()) {
             while (pendingStravaBikes.isNotEmpty()) {
                 val stravaBike = pendingStravaBikes.removeFirst()
-                bikeRepository.addBike(Bike(id = stravaBike.id, name = stravaBike.name))
+                bikeRepository.addBike(stravaBike.toBike())
             }
             _uiState.update {
                 it.copy(
@@ -239,6 +298,9 @@ class HomeScreenViewModel(
 
     private fun isLikelyStravaId(id: String): Boolean =
         id.startsWith("b") && id.length > 8 && id.all { it.isLetterOrDigit() }
+
+    private fun StravaBike.toBike(): Bike =
+        Bike(id = id, name = name, distanceMeters = distanceMeters)
 
     private fun connectStrava(context: Context) {
         if (!stravaAuthRepository.hasCredentials()) {
@@ -286,6 +348,7 @@ class HomeScreenViewModel(
     fun logout(onLoggedOut: () -> Unit) {
         viewModelScope.launch {
             bikeRepository.clearLocalAndStopSync()
+            selectedBikeStore.clear()
             runCatching { appAuth.signOut() }
             runCatching { googleSignInGateway.signOut() }
             authTokenStore.clearToken()
