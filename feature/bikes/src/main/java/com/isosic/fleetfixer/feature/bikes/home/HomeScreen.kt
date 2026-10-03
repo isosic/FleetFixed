@@ -48,7 +48,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.isosic.fleetfixer.core.model.Bike
 import com.isosic.fleetfixer.core.ui.theme.FleetFixerTheme
 import java.util.Locale
@@ -67,7 +70,14 @@ fun HomeScreen(
     val selectedBike by viewModel.selectedBike.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.onHomeVisible()
+        }
+    }
 
     LaunchedEffect(uiState.stravaMessage) {
         val message = uiState.stravaMessage ?: return@LaunchedEffect

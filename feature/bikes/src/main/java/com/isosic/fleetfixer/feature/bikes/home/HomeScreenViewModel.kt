@@ -75,12 +75,16 @@ class HomeScreenViewModel(
 
     private val pendingStravaBikes = ArrayDeque<StravaBike>()
     private val consumedLocalBikeIds = mutableSetOf<String>()
+    private var silentRefreshInFlight = false
 
     init {
         bikeRepository.startSync(viewModelScope)
         viewModelScope.launch {
             stravaAuthRepository.isConnected.collect { connected ->
                 _uiState.update { it.copy(isStravaConnected = connected) }
+                if (connected) {
+                    refreshLinkedStravaBikesIfNeeded()
+                }
             }
         }
         viewModelScope.launch {
@@ -129,6 +133,12 @@ class HomeScreenViewModel(
         }
     }
 
+    fun onHomeVisible() {
+        viewModelScope.launch {
+            refreshLinkedStravaBikesIfNeeded()
+        }
+    }
+
     fun onStravaClick(context: Context) {
         if (_uiState.value.isStravaBusy) return
         if (_uiState.value.isStravaConnected) {
@@ -145,7 +155,10 @@ class HomeScreenViewModel(
                 it.copy(isStravaBusy = true, stravaMessage = null, stravaLinkPrompt = null)
             }
             stravaBikeRemoteSource.fetchAthleteBikes()
-                .onSuccess { beginLinkFlow(it) }
+                .onSuccess { stravaBikes ->
+                    markBikeSyncCompleted()
+                    beginLinkFlow(stravaBikes)
+                }
                 .onFailure { error ->
                     _uiState.update {
                         it.copy(
@@ -155,6 +168,46 @@ class HomeScreenViewModel(
                     }
                 }
         }
+    }
+
+    private suspend fun refreshLinkedStravaBikesIfNeeded() {
+        if (!_uiState.value.isStravaConnected) return
+        if (_uiState.value.isStravaBusy || _uiState.value.stravaLinkPrompt != null) return
+        if (silentRefreshInFlight) return
+
+        val lastSyncAt = stravaTokenStore.getLastBikeSyncEpochMillis()
+        val now = System.currentTimeMillis()
+        if (now - lastSyncAt < SILENT_SYNC_MIN_INTERVAL_MS) return
+
+        silentRefreshInFlight = true
+        try {
+            stravaBikeRemoteSource.fetchAthleteBikes()
+                .onSuccess { stravaBikes ->
+                    val localBikes = bikeRepository.observeBikes().first()
+                    syncLinkedBikesFromStrava(localBikes, stravaBikes)
+                    markBikeSyncCompleted()
+
+                    val existingIds = localBikes.map { it.id }.toSet()
+                    val newCount = stravaBikes.count { it.id !in existingIds }
+                    if (newCount > 0) {
+                        _uiState.update {
+                            it.copy(
+                                stravaMessage = if (newCount == 1) {
+                                    "New Strava bike found. Use Import Strava bikes to add it."
+                                } else {
+                                    "$newCount new Strava bikes found. Use Import Strava bikes to add them."
+                                }
+                            )
+                        }
+                    }
+                }
+        } finally {
+            silentRefreshInFlight = false
+        }
+    }
+
+    private suspend fun markBikeSyncCompleted() {
+        stravaTokenStore.setLastBikeSyncEpochMillis(System.currentTimeMillis())
     }
 
     fun linkSelectedLocalBike(localBikeId: String) {
@@ -196,7 +249,7 @@ class HomeScreenViewModel(
         val bikesToProcess = stravaBikes.filterNot { it.id in existingIds }
         val linkableLocalBikes = localBikes.filterNot { isLikelyStravaId(it.id) }
 
-        syncDistanceForLinkedBikes(localBikes, stravaBikes)
+        syncLinkedBikesFromStrava(localBikes, stravaBikes)
 
         pendingStravaBikes.clear()
         pendingStravaBikes.addAll(bikesToProcess)
@@ -232,15 +285,23 @@ class HomeScreenViewModel(
         }
     }
 
-    private suspend fun syncDistanceForLinkedBikes(
+    private suspend fun syncLinkedBikesFromStrava(
         localBikes: List<Bike>,
         stravaBikes: List<StravaBike>
     ) {
         val localById = localBikes.associateBy { it.id }
         stravaBikes.forEach { stravaBike ->
             val local = localById[stravaBike.id] ?: return@forEach
-            if (local.distanceMeters != stravaBike.distanceMeters) {
-                bikeRepository.addBike(local.copy(distanceMeters = stravaBike.distanceMeters))
+            if (
+                local.distanceMeters != stravaBike.distanceMeters ||
+                local.name != stravaBike.name
+            ) {
+                bikeRepository.addBike(
+                    local.copy(
+                        name = stravaBike.name,
+                        distanceMeters = stravaBike.distanceMeters
+                    )
+                )
             }
         }
     }
@@ -360,5 +421,9 @@ class HomeScreenViewModel(
     override fun onCleared() {
         bikeRepository.stopSync()
         super.onCleared()
+    }
+
+    private companion object {
+        const val SILENT_SYNC_MIN_INTERVAL_MS = 30L * 60L * 1000L
     }
 }

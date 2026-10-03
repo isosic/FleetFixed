@@ -30,4 +30,6 @@ interface StravaTokenStore {
     suspend fun getTokens(): StravaTokens?
     suspend fun saveTokens(tokens: StravaTokens)
     suspend fun clearTokens()
+    suspend fun getLastBikeSyncEpochMillis(): Long
+    suspend fun setLastBikeSyncEpochMillis(epochMillis: Long)
 }

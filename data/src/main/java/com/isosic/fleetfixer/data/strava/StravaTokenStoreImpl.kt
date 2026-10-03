@@ -48,6 +48,18 @@ class StravaTokenStoreImpl(private val context: Context) : StravaTokenStore {
             prefs.remove(KEY_EXPIRES_AT)
             prefs.remove(KEY_ATHLETE_ID)
             prefs.remove(KEY_SCOPE)
+            prefs.remove(KEY_LAST_BIKE_SYNC_AT)
+        }
+    }
+
+    override suspend fun getLastBikeSyncEpochMillis(): Long =
+        context.stravaDataStore.data.map { prefs ->
+            prefs[KEY_LAST_BIKE_SYNC_AT] ?: 0L
+        }.first()
+
+    override suspend fun setLastBikeSyncEpochMillis(epochMillis: Long) {
+        context.stravaDataStore.edit { prefs ->
+            prefs[KEY_LAST_BIKE_SYNC_AT] = epochMillis
         }
     }
 
@@ -71,5 +83,6 @@ class StravaTokenStoreImpl(private val context: Context) : StravaTokenStore {
         val KEY_EXPIRES_AT = longPreferencesKey("strava_expires_at")
         val KEY_ATHLETE_ID = longPreferencesKey("strava_athlete_id")
         val KEY_SCOPE = stringPreferencesKey("strava_scope")
+        val KEY_LAST_BIKE_SYNC_AT = longPreferencesKey("strava_last_bike_sync_at")
     }
 }
