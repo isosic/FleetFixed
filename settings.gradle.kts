@@ -24,4 +24,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "FleetFixer"
 include(":app")
+include(":core")
+include(":data")
+include(":feature:auth")
+include(":feature:bikes")
+include(":feature:strava")
  
